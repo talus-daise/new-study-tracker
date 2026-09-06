@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#21242b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <title>学習ノート — 今日のようす</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="page-display">
+  <div class="dashboard">
+    <header class="dash-header">
+      <h1 class="brand">学習ノート</h1>
+      <div class="dash-date">
+        <span id="today-label" class="today-label"></span>
+        <span id="clock" class="clock"></span>
+      </div>
+    </header>
+
+    <section class="calendar-panel">
+      <div class="calendar-panel-head">
+        <button id="prev-month" class="month-nav" aria-label="前の月">‹</button>
+        <h2 id="month-label" class="month-label"></h2>
+        <button id="next-month" class="month-nav" aria-label="次の月">›</button>
+      </div>
+      <div class="weekday-row">
+        <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </section>
+
+    <section class="summary-panel">
+      <div class="streak-block">
+        <span class="streak-flame" aria-hidden="true">🔥</span>
+        <span class="streak-label">連続学習</span>
+        <span id="streak-number" class="streak-number">0</span>
+        <span class="streak-unit">日</span>
+      </div>
+      <div class="today-summary-block">
+        <h2>今日の学習</h2>
+        <p id="today-total" class="today-total">合計 0分</p>
+        <ul id="today-summary-list" class="today-summary-list"></ul>
+        <p id="today-summary-empty" class="empty-note">今日はまだ記録がありません</p>
+      </div>
+    </section>
+
+    <footer class="legend-bar" id="legend-bar"></footer>
+  </div>
+
+  <script src="/js/display.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+
+</html>

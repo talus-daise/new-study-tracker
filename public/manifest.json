@@ -1,0 +1,21 @@
+{
+    "name": "学習ノート",
+    "short_name": "学習ノート",
+    "description": "毎日の学習を記録して振り返るノート",
+    "lang": "ja",
+    "dir": "ltr",
+    "start_url": "/display",
+    "scope": "/",
+    "display": "fullscreen",
+    "orientation": "any",
+    "theme_color": "#21242b",
+    "background_color": "#21242b",
+    "icons": [
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

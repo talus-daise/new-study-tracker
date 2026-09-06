@@ -1,0 +1,15 @@
+name = "study-tracker"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# 静的ファイル（入力ページ・表示ページ）を配信するアセットバインディング
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# D1データベース。`wrangler d1 create study-tracker-db` で作成後、
+# 表示された database_id を下記に貼り付けてください。
+[[d1_databases]]
+binding = "DB"
+database_name = "study-tracker-db"
+database_id = "31c76014-7904-48bf-9717-16ea3f78ada2"

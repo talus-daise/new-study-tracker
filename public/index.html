@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#21242b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <title>学習ノート — きろく</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="page-input">
+  <header class="topbar">
+    <h1 class="brand">学習ノート</h1>
+    <a class="nav-link" href="/display.html">表示画面をひらく →</a>
+  </header>
+
+  <main class="input-shell">
+    <section class="card entry-card">
+      <h2>今日の学習を記録する</h2>
+      <form id="record-form">
+        <label class="field">
+          <span>日付</span>
+          <input type="date" id="date-input" required>
+        </label>
+
+        <fieldset class="field type-field">
+          <legend>学習タイプ</legend>
+          <div id="type-picker" class="type-picker"></div>
+        </fieldset>
+
+        <label class="field">
+          <span>学習時間（分）</span>
+          <input type="number" id="duration-input" min="0" step="5" placeholder="例）30">
+        </label>
+
+        <label class="field">
+          <span>内容・メモ</span>
+          <textarea id="content-input" rows="3" placeholder="例）数学ワーク p.12-13"></textarea>
+        </label>
+
+        <button type="submit" class="btn-primary">記録する</button>
+        <p id="form-message" class="form-message" role="status"></p>
+      </form>
+    </section>
+
+    <section class="card today-card">
+      <h2>その日の記録</h2>
+      <ul id="today-list" class="today-list"></ul>
+      <p id="today-empty" class="empty-note">まだ記録がありません</p>
+    </section>
+
+    <details class="card type-manage-card">
+      <summary>学習タイプを編集する</summary>
+      <ul id="type-list" class="type-list"></ul>
+      <form id="type-form" class="type-form">
+        <input type="text" id="new-type-name" placeholder="新しいタイプ名（例：通信）" required maxlength="20">
+        <input type="color" id="new-type-color" value="#4C6EF5">
+        <button type="submit" class="btn-secondary">追加</button>
+      </form>
+    </details>
+  </main>
+
+  <script src="/js/input.js"></script>
+  <script src="/js/pwa.js"></script>
+</body>
+
+</html>
