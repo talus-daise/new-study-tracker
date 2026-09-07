@@ -1,14 +1,16 @@
-const CACHE_NAME = "study-tracker-shell-v1";
+const CACHE_NAME = "study-tracker-shell-v2";
 const APP_SHELL = [
     "/",
-    "/index.html",
-    "/display.html",
+    "/display",
     "/manifest.json",
     "/css/style.css",
     "/js/input.js",
     "/js/display.js",
     "/js/pwa.js",
     "/icons/icon.svg",
+    "/icons/icon-192.png",
+    "/icons/icon-512.png",
+    "/icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -31,21 +33,32 @@ self.addEventListener("activate", (event) => {
     self.clients.claim();
 });
 
+// stale-while-revalidate: まずキャッシュを即返しつつ、裏で必ず最新を取りに行って
+// キャッシュを更新する。CACHE_NAMEを毎回上げなくても新しいデプロイが次回表示に反映される。
 self.addEventListener("fetch", (event) => {
     const requestUrl = new URL(event.request.url);
     if (event.request.method !== "GET" || requestUrl.pathname.startsWith("/api/")) {
         return;
     }
+    if (requestUrl.origin !== self.location.origin) {
+        return;
+    }
 
     event.respondWith(
-        caches.match(event.request).then((cached) =>
-            cached || fetch(event.request).then((response) => {
-                if (response.ok && requestUrl.origin === self.location.origin) {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-                }
-                return response;
-            })
-        )
+        caches.open(CACHE_NAME).then(async (cache) => {
+            const cached = await cache.match(event.request);
+            const updateCache = fetch(event.request)
+                .then((response) => {
+                    if (response.ok) cache.put(event.request, response.clone());
+                    return response;
+                })
+                .catch(() => cached);
+
+            if (cached) {
+                event.waitUntil(updateCache);
+                return cached;
+            }
+            return updateCache;
+        })
     );
 });

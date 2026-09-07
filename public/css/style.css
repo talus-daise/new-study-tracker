@@ -21,6 +21,24 @@
 
   --font-display: "Shippori Mincho", serif;
   --font-body: "Zen Maru Gothic", sans-serif;
+
+  /* 表示ページの「机まわり」の配色（日中/夜間で切り替える）。
+     初期値＝日中。body.theme-dark が付くと夜間の値に上書きされる。 */
+  --chrome-bg: #efe9da;
+  --chrome-panel: #e1d9c4;
+  --chrome-text: var(--graphite);
+  --chrome-text-soft: var(--graphite-soft);
+  --chrome-border: rgba(58, 54, 46, 0.3);
+  --chrome-accent: var(--amber-deep);
+}
+
+body.theme-dark {
+  --chrome-bg: var(--ink-900);
+  --chrome-panel: var(--ink-700);
+  --chrome-text: var(--paper);
+  --chrome-text-soft: rgba(250, 246, 236, 0.82);
+  --chrome-border: rgba(250, 246, 236, 0.4);
+  --chrome-accent: var(--amber);
 }
 
 * {
@@ -298,11 +316,13 @@ body.page-input {
    表示ページ（タブレット・1画面固定）
    ========================================================== */
 body.page-display {
-  background: var(--ink-900);
+  background: var(--chrome-bg);
   overflow: hidden;
+  transition: background 1.5s ease;
 }
 
 .dashboard {
+  position: relative;
   height: 100dvh;
   width: 100%;
   padding: 22px 26px;
@@ -316,6 +336,20 @@ body.page-display {
   gap: 18px;
 }
 
+/* 21時〜5時のあいだ、画面全体を暗く落とすオーバーレイ */
+.dim-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background 3s ease;
+  z-index: 50;
+}
+
+body.theme-dimmed .dim-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
 .dash-header {
   grid-area: header;
   display: flex;
@@ -325,7 +359,7 @@ body.page-display {
 
 .dash-header .brand {
   font-family: var(--font-display);
-  color: var(--paper);
+  color: var(--chrome-text);
   font-size: 1.6rem;
   margin: 0;
 }
@@ -334,7 +368,7 @@ body.page-display {
   display: flex;
   gap: 16px;
   align-items: baseline;
-  color: var(--paper);
+  color: var(--chrome-text);
 }
 
 .today-label {
@@ -344,7 +378,7 @@ body.page-display {
 .clock {
   font-family: var(--font-display);
   font-size: 1.3rem;
-  color: var(--amber);
+  color: var(--chrome-accent);
 }
 
 .calendar-panel {
@@ -365,7 +399,7 @@ body.page-display {
 .month-label {
   font-family: var(--font-display);
   font-size: 1.3rem;
-  color: var(--paper);
+  color: var(--chrome-text);
   margin: 0;
   min-width: 8em;
   text-align: center;
@@ -373,9 +407,9 @@ body.page-display {
 
 .month-nav {
   appearance: none;
-  border: 1px solid rgba(250, 246, 236, 0.4);
+  border: 1px solid var(--chrome-border);
   background: none;
-  color: var(--paper);
+  color: var(--chrome-text);
   border-radius: 50%;
   width: 34px;
   height: 34px;
@@ -386,7 +420,7 @@ body.page-display {
 .weekday-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  color: var(--paper);
+  color: var(--chrome-text);
   opacity: 0.7;
   font-size: 0.85rem;
   text-align: center;
@@ -506,13 +540,14 @@ body.page-display {
 }
 
 .streak-block {
-  background: var(--ink-700);
+  background: var(--chrome-panel);
   border-radius: 6px;
   padding: 18px 20px;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  color: var(--paper);
+  color: var(--chrome-text);
+  transition: background 1.5s ease;
 }
 
 .streak-flame {
@@ -543,7 +578,7 @@ body.page-display {
 .streak-number {
   font-family: var(--font-display);
   font-size: 2.6rem;
-  color: var(--amber);
+  color: var(--chrome-accent);
   line-height: 1;
 }
 
@@ -564,12 +599,12 @@ body.page-display {
   font-family: var(--font-display);
   font-size: 1.1rem;
   margin: 0 0 6px;
-  color: var(--paper);
+  color: var(--chrome-text);
 }
 
 .today-total {
   margin: 0 0 10px;
-  color: var(--paper);
+  color: var(--chrome-text);
   font-size: 1rem;
   font-weight: 700;
 }
@@ -589,16 +624,16 @@ body.page-display {
   align-items: center;
   gap: 8px;
   font-size: 0.92rem;
-  color: var(--paper);
+  color: var(--chrome-text);
 }
 
 .today-summary-list .entry-meta {
-  color: rgba(250, 246, 236, 0.82);
+  color: var(--chrome-text-soft);
   font-size: 0.82rem;
 }
 
 .today-summary-block .empty-note {
-  color: rgba(250, 246, 236, 0.78);
+  color: var(--chrome-text-soft);
 }
 
 .legend-bar {
@@ -606,7 +641,7 @@ body.page-display {
   display: flex;
   gap: 20px;
   align-items: center;
-  color: var(--paper);
+  color: var(--chrome-text);
   font-size: 0.85rem;
   opacity: 0.85;
 }

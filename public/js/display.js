@@ -24,6 +24,90 @@
     return `${y}-${m}-${day}`;
   }
 
+  /* ---------- 日没にあわせたダークモード ----------
+     21:00〜5:00は問答無用で「夜間（暗め）」、
+     5:00〜21:00は日没時刻を境に「昼間」⇄「夜（通常の暗さ)」を切り替える。
+     日没時刻はタブレットの位置情報から概算し、取得できない場合は18:00を仮の日没とする。 */
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  let geoCoords = null;
+  let sunsetCache = { dateKey: null, sunset: null };
+
+  function toRad(deg) { return (deg * Math.PI) / 180; }
+  function toDeg(rad) { return (rad * 180) / Math.PI; }
+
+  // 緯度経度から日没時刻(UTC)を近似計算する（誤差はおよそ数分程度）
+  function calcSunsetUtc(date, lat, lon) {
+    const dayOfYear = Math.floor(
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+        Date.UTC(date.getFullYear(), 0, 0)) / 86400000
+    );
+    const lngHour = lon / 15;
+    const t = dayOfYear + (18 - lngHour) / 24;
+
+    const M = 0.9856 * t - 3.289;
+    let L = M + 1.916 * Math.sin(toRad(M)) + 0.02 * Math.sin(toRad(2 * M)) + 282.634;
+    L = ((L % 360) + 360) % 360;
+
+    let RA = toDeg(Math.atan(0.91764 * Math.tan(toRad(L))));
+    RA = ((RA % 360) + 360) % 360;
+    RA += Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90;
+    RA /= 15;
+
+    const sinDec = 0.39782 * Math.sin(toRad(L));
+    const cosDec = Math.cos(Math.asin(sinDec));
+
+    const zenith = 90.833;
+    const cosH =
+      (Math.cos(toRad(zenith)) - sinDec * Math.sin(toRad(lat))) / (cosDec * Math.cos(toRad(lat)));
+    if (cosH > 1 || cosH < -1) return null; // 極端な高緯度など、その日は日没/日の出がない
+
+    const H = (360 - toDeg(Math.acos(cosH))) / 15;
+    const T = H + RA - 0.06571 * t - 6.622;
+    const UT = ((T - lngHour) % 24 + 24) % 24;
+
+    const hours = Math.floor(UT);
+    const minutes = Math.floor((UT - hours) * 60);
+    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes));
+  }
+
+  function getTodaySunset() {
+    const now = new Date();
+    const dateKey = localDateStr(now);
+    if (sunsetCache.dateKey === dateKey) return sunsetCache.sunset;
+
+    let sunset = geoCoords ? calcSunsetUtc(now, geoCoords.lat, geoCoords.lon) : null;
+    if (!sunset) {
+      // 位置情報が使えない場合の暫定値（18:00を日没とみなす）
+      sunset = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0);
+    }
+    sunsetCache = { dateKey, sunset };
+    return sunset;
+  }
+
+  function applyTimeTheme() {
+    const now = new Date();
+    const hour = now.getHours();
+    const isNightWindow = hour >= 21 || hour < 5; // 21:00〜5:00
+    const isDark = isNightWindow || now >= getTodaySunset();
+    document.body.classList.toggle("theme-dark", isDark);
+    document.body.classList.toggle("theme-dimmed", isNightWindow);
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute("content", isDark ? "#21242b" : "#efe9da");
+    }
+  }
+
+  if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        geoCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        sunsetCache = { dateKey: null, sunset: null }; // 取得できたので再計算させる
+        applyTimeTheme();
+      },
+      () => { /* 位置情報が拒否/取得不可でも18:00固定の近似で動作を続ける */ },
+      { timeout: 8000, maximumAge: 12 * 60 * 60 * 1000 }
+    );
+  }
+
   async function api(path) {
     const res = await fetch(path);
     if (!res.ok) throw new Error("通信に失敗しました: " + path);
@@ -166,11 +250,16 @@
     viewMonth = now.getMonth() + 1;
     updateClock();
     setInterval(updateClock, 15000);
+    applyTimeTheme();
+    setInterval(applyTimeTheme, 60 * 1000); // 昼夜/深夜の切り替わりを毎分チェック
     refreshAll();
     // 数分おきに今日の概要とカレンダーを再取得（表示しっぱなしのタブレット向け）
     setInterval(refreshAll, 5 * 60 * 1000);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") refreshAll();
+      if (document.visibilityState === "visible") {
+        applyTimeTheme();
+        refreshAll();
+      }
     });
   })();
 })();
