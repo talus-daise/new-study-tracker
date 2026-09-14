@@ -7,8 +7,9 @@
   <meta name="theme-color" content="#21242b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="学習ノート入力">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="/manifest-input.json">
   <title>学習ノート — きろく</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,6 +60,100 @@
       <p id="today-empty" class="empty-note">まだ記録がありません</p>
     </section>
 
+    <section class="card diary-card">
+      <h2>その日の日記</h2>
+      <label class="field">
+        <span>今日あったこと・思ったこと</span>
+        <textarea id="diary-input" rows="5" maxlength="2000" placeholder="今日あったことを書いてみよう"></textarea>
+      </label>
+      <button type="button" id="diary-save-btn" class="btn-primary">日記を保存</button>
+      <p id="diary-message" class="form-message" role="status"></p>
+    </section>
+
+    <section class="card tasks-card">
+      <h2>今日やること</h2>
+      <p id="study-block-banner" class="block-banner" hidden></p>
+      <ul id="today-tasks-list" class="task-list"></ul>
+      <p id="today-tasks-empty" class="empty-note">今日のタスクはありません</p>
+      <button type="button" id="focus-start-btn" class="btn-secondary">集中モードで進める</button>
+
+      <form id="task-form" class="task-form">
+        <label class="field">
+          <span>タスクを追加</span>
+          <input type="text" id="task-title-input" placeholder="例）数学のワーク" maxlength="100" required>
+        </label>
+        <fieldset class="field type-field">
+          <legend>種類</legend>
+          <div id="task-type-picker" class="type-picker"></div>
+        </fieldset>
+        <label class="field">
+          <span>締切（任意）</span>
+          <input type="date" id="task-due-input">
+        </label>
+        <button type="submit" class="btn-primary">タスクを追加</button>
+        <p id="task-message" class="form-message" role="status"></p>
+      </form>
+
+      <details class="task-all-details">
+        <summary>すべてのタスク</summary>
+        <ul id="all-tasks-list" class="task-list"></ul>
+        <p id="all-tasks-empty" class="empty-note">タスクはまだありません</p>
+      </details>
+    </section>
+
+    <section class="card belongings-card">
+      <h2>持ち物チェック</h2>
+      <label class="field">
+        <span>日付</span>
+        <input type="date" id="belonging-date-input">
+      </label>
+      <div class="belonging-add-row">
+        <input type="text" id="belonging-name-input" placeholder="持ち物の名前（例：体操着）" maxlength="50">
+        <button type="button" id="belonging-add-btn" class="btn-secondary">追加</button>
+      </div>
+      <p id="belonging-progress" class="belonging-progress"></p>
+      <ul id="belonging-list" class="belonging-list"></ul>
+      <p id="belonging-empty" class="empty-note">この日の持ち物はまだ登録されていません</p>
+    </section>
+
+    <details class="card block-manage-card">
+      <summary>学習ブロックを固定する</summary>
+      <p class="block-manage-hint">曜日ごとに勉強する時間を決めておくと、その時間になったら「今日やること」欄に通知が出ます</p>
+      <ul id="block-list" class="block-list"></ul>
+      <p id="block-empty" class="empty-note">まだ学習ブロックがありません</p>
+      <form id="block-form" class="block-form">
+        <select id="block-weekday-input" aria-label="曜日"></select>
+        <input type="time" id="block-start-input" value="19:00" aria-label="開始時刻">
+        <span>〜</span>
+        <input type="time" id="block-end-input" value="20:00" aria-label="終了時刻">
+        <input type="text" id="block-label-input" placeholder="メモ（任意）" maxlength="50">
+        <button type="submit" class="btn-secondary">固定する</button>
+      </form>
+    </details>
+
+    <details class="card weekly-review-card">
+      <summary>今週の振り返り</summary>
+      <div class="review-rate-row">
+        <span id="review-rate-pct" class="review-rate-pct">0%</span>
+        <span id="review-rate-fraction" class="review-rate-fraction">0 / 0 件</span>
+      </div>
+      <div class="review-bar-track">
+        <div id="review-bar" class="review-bar"></div>
+      </div>
+      <div class="review-stats">
+        <div class="review-stat">
+          <span class="review-stat-label">平均 先延ばし回数</span>
+          <span id="review-avg-postponed" class="review-stat-value">0</span>
+        </div>
+        <div class="review-stat">
+          <span class="review-stat-label">タスク達成ストリーク</span>
+          <span id="review-streak" class="review-stat-value">0日</span>
+        </div>
+      </div>
+      <ul id="review-by-type" class="review-by-type"></ul>
+      <p id="review-longest" class="empty-note"></p>
+    </details>
+
     <details class="card type-manage-card">
       <summary>学習タイプを編集する</summary>
       <ul id="type-list" class="type-list"></ul>
@@ -70,7 +165,36 @@
     </details>
   </main>
 
+  <div id="focus-overlay" class="focus-overlay" hidden>
+    <div class="focus-panel">
+      <div id="focus-normal">
+        <div class="focus-top">
+          <span id="focus-count-label" class="focus-count-label"></span>
+          <button type="button" id="focus-cancel-btn" class="focus-close">中断</button>
+        </div>
+        <div class="focus-body">
+          <span id="focus-type-badge" class="task-type-badge"></span>
+          <p id="focus-title" class="focus-title"></p>
+          <span id="focus-days" class="task-days focus-days"></span>
+        </div>
+        <button type="button" id="focus-complete-btn" class="btn-primary focus-complete-btn">完了して次へ</button>
+      </div>
+      <div id="focus-break" class="focus-break" hidden>
+        <p class="focus-break-time">5分</p>
+        <p id="focus-break-msg" class="focus-break-msg"></p>
+        <button type="button" id="focus-continue-btn" class="btn-primary">つづける</button>
+        <button type="button" id="focus-exit-btn" class="focus-close">今日の画面に戻る</button>
+      </div>
+      <div id="focus-empty" class="focus-empty" hidden>
+        <p class="focus-empty-title">やることが空っぽ！</p>
+        <p id="focus-empty-count" class="focus-empty-count"></p>
+        <button type="button" id="focus-empty-exit-btn" class="btn-primary">今日の画面に戻る</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/input.js"></script>
+  <script src="/js/tasks.js"></script>
   <script src="/js/pwa.js"></script>
 </body>
 

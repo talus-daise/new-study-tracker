@@ -1,10 +1,12 @@
-const CACHE_NAME = "study-tracker-shell-v2";
+const CACHE_NAME = "study-tracker-shell-v4";
 const APP_SHELL = [
     "/",
     "/display",
-    "/manifest.json",
+    "/manifest-input.json",
+    "/manifest-display.json",
     "/css/style.css",
     "/js/input.js",
+    "/js/tasks.js",
     "/js/display.js",
     "/js/pwa.js",
     "/icons/icon.svg",

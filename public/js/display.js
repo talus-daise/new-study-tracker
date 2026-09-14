@@ -10,6 +10,7 @@
   const todaySummaryList = document.getElementById("today-summary-list");
   const todaySummaryEmpty = document.getElementById("today-summary-empty");
   const legendBar = document.getElementById("legend-bar");
+  const diaryText = document.getElementById("diary-text");
 
   const WEEKDAY_KANJI = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -222,6 +223,14 @@
       meta.textContent = formatMinutes(r.duration_minutes);
       li.append(dot, label, meta);
       todaySummaryList.appendChild(li);
+    }
+
+    if (summary.diary && summary.diary.trim()) {
+      diaryText.textContent = summary.diary;
+      diaryText.classList.remove("empty-note");
+    } else {
+      diaryText.textContent = "まだ書かれていません";
+      diaryText.classList.add("empty-note");
     }
   }
 

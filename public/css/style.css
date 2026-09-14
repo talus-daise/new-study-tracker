@@ -45,6 +45,10 @@ body.theme-dark {
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -278,6 +282,491 @@ body.page-input {
 
 .icon-btn:hover {
   color: var(--coral);
+}
+
+.diary-card {
+  border-left-color: var(--moss);
+}
+
+.diary-card textarea {
+  width: 100%;
+}
+
+/* ---------- 今日やること／タスク管理 ---------- */
+
+.tasks-card {
+  border-left-color: var(--amber-deep);
+}
+
+.block-banner {
+  background: var(--amber);
+  color: var(--graphite);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(58, 54, 46, 0.04);
+}
+
+.task-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 160px;
+  flex-wrap: wrap;
+}
+
+.task-type-badge {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--chip-color, var(--teal));
+}
+
+.task-title {
+  font-weight: 700;
+}
+
+.task-title.is-done {
+  color: var(--graphite-soft);
+  text-decoration: line-through;
+}
+
+.task-postponed {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--coral);
+}
+
+.task-days {
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  min-width: 44px;
+  text-align: center;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--ink-900);
+  color: var(--paper);
+}
+
+.task-days[data-state="none"] {
+  background: rgba(58, 54, 46, 0.12);
+  color: var(--graphite-soft);
+}
+
+.task-days[data-state="soon"] {
+  background: var(--amber);
+  color: var(--graphite);
+}
+
+.task-days[data-state="danger"] {
+  background: var(--coral);
+  color: #fff;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.btn-chip {
+  appearance: none;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 2px solid var(--teal);
+  background: var(--teal);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 6px 14px;
+}
+
+.btn-chip.is-outline {
+  background: #fff;
+  color: var(--graphite-soft);
+  border-color: rgba(58, 54, 46, 0.28);
+}
+
+.task-form {
+  margin-top: 4px;
+}
+
+.task-all-details {
+  margin-top: 16px;
+  border-top: 1px solid var(--paper-line);
+  padding-top: 12px;
+}
+
+.task-all-details summary,
+.block-manage-card summary,
+.weekly-review-card summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.task-all-details[open] summary {
+  margin-bottom: 10px;
+}
+
+/* ---------- 持ち物チェック ---------- */
+
+.belongings-card {
+  border-left-color: var(--teal);
+}
+
+.belonging-add-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.belonging-add-row input[type="text"] {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(58, 54, 46, 0.28);
+}
+
+.belonging-progress {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.belonging-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.belonging-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.belonging-check {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(58, 54, 46, 0.28);
+  background: #fff;
+  color: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.belonging-check.is-checked {
+  background: var(--moss);
+  border-color: var(--moss);
+  color: #fff;
+}
+
+.belonging-name {
+  flex: 1;
+}
+
+.belonging-name.is-checked {
+  color: var(--graphite-soft);
+  text-decoration: line-through;
+}
+
+/* ---------- 固定学習ブロック ---------- */
+
+.block-manage-card {
+  border-left-color: var(--moss);
+}
+
+.block-manage-hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--graphite-soft);
+}
+
+.block-manage-card[open] summary {
+  margin-bottom: 14px;
+}
+
+.block-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.block-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+}
+
+.block-weekday {
+  font-weight: 700;
+  flex: none;
+}
+
+.block-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--graphite-soft);
+  flex: none;
+}
+
+.block-note {
+  flex: 1;
+  color: var(--graphite-soft);
+  font-size: 0.85rem;
+}
+
+.block-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.block-form select,
+.block-form input[type="time"] {
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(58, 54, 46, 0.28);
+}
+
+.block-form input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(58, 54, 46, 0.28);
+}
+
+/* ---------- 週次振り返り ---------- */
+
+.weekly-review-card {
+  border-left-color: var(--coral);
+}
+
+.weekly-review-card[open] summary {
+  margin-bottom: 14px;
+}
+
+.review-rate-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.review-rate-pct {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--amber-deep);
+}
+
+.review-rate-fraction {
+  color: var(--graphite-soft);
+  font-size: 0.9rem;
+}
+
+.review-bar-track {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(58, 54, 46, 0.1);
+  overflow: hidden;
+}
+
+.review-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--amber-deep);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.review-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.review-stat {
+  background: rgba(58, 54, 46, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.review-stat-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--graphite-soft);
+  margin-bottom: 4px;
+}
+
+.review-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.review-by-type {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-by-type li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+/* ---------- 集中モード ---------- */
+
+.focus-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--ink-900);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.focus-panel {
+  width: 100%;
+  max-width: 420px;
+  color: var(--paper);
+  text-align: center;
+}
+
+#focus-normal {
+  text-align: left;
+}
+
+.focus-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.focus-count-label {
+  font-variant-numeric: tabular-nums;
+  color: rgba(250, 246, 236, 0.6);
+  font-size: 0.9rem;
+}
+
+.focus-close {
+  appearance: none;
+  border: none;
+  background: none;
+  color: rgba(250, 246, 236, 0.6);
+  cursor: pointer;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.focus-body {
+  margin-top: 48px;
+  text-align: center;
+}
+
+.focus-title {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 16px 0 20px;
+}
+
+.focus-days {
+  display: inline-block;
+}
+
+.focus-complete-btn {
+  width: 100%;
+  margin-top: 48px;
+  padding: 18px;
+  font-size: 1.1rem;
+  border-radius: 14px;
+}
+
+.focus-break-time {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.focus-break-msg {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 12px 0 32px;
+}
+
+.focus-break .btn-primary,
+.focus-empty .btn-primary {
+  padding: 14px 32px;
+  border-radius: 999px;
+}
+
+.focus-break .focus-close,
+.focus-empty .focus-close {
+  display: block;
+  margin: 16px auto 0;
+}
+
+.focus-empty-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--moss);
+}
+
+.focus-empty-count {
+  color: rgba(250, 246, 236, 0.7);
+  margin: 8px 0 0;
 }
 
 .type-manage-card summary {
@@ -633,6 +1122,37 @@ body.theme-dimmed .dim-overlay {
 }
 
 .today-summary-block .empty-note {
+  color: var(--chrome-text-soft);
+}
+
+.diary-block {
+  flex-shrink: 0;
+  max-height: 30%;
+  padding-top: 12px;
+  border-top: 1px solid var(--chrome-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diary-block h2 {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  margin: 0 0 6px;
+  color: var(--chrome-text);
+  flex-shrink: 0;
+}
+
+.diary-text {
+  margin: 0;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--chrome-text);
+  white-space: pre-wrap;
+}
+
+.diary-text.empty-note {
   color: var(--chrome-text-soft);
 }
 

@@ -13,8 +13,55 @@ function fail(message, status = 400) {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+/* ==========================================================
+   JST（日本時間）の日付・時刻ヘルパー
+   Cloudflare Workersのランタイムはタイムゾーンの概念を持たず、
+   Dateの各種メソッドはUTC相当になる。タスクの締切判定や
+   曜日・時刻の判定は日本の生活リズム基準で行うため、
+   ここでJST(UTC+9)に補正してから使う。
+   ========================================================== */
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+function shiftToJST(date) {
+  return new Date(date.getTime() + JST_OFFSET_MS);
+}
+
+function todayISOInJST(now = new Date()) {
+  return shiftToJST(now).toISOString().slice(0, 10);
+}
+
+function yesterdayISOInJST(dateISO) {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysAgoISOInJST(n, now = new Date()) {
+  const shifted = shiftToJST(now);
+  shifted.setUTCDate(shifted.getUTCDate() - n);
+  return shifted.toISOString().slice(0, 10);
+}
+
+function diffDaysInJST(dueISO, baseISO) {
+  const due = new Date(`${dueISO}T00:00:00Z`);
+  const base = new Date(`${baseISO}T00:00:00Z`);
+  return Math.round((due.getTime() - base.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function jstWeekday(now = new Date()) {
+  return shiftToJST(now).getUTCDay();
+}
+
+function jstHHMM(now = new Date()) {
+  return shiftToJST(now).toISOString().slice(11, 16);
+}
+
+/* ==========================================================
+   学習タイプ
+   ========================================================== */
 async function listTypes(env) {
   const { results } = await env.DB.prepare(
     "SELECT id, name, color, sort_order FROM study_types ORDER BY sort_order ASC, id ASC"
@@ -56,6 +103,9 @@ async function deleteType(env, id) {
   return { deleted: true };
 }
 
+/* ==========================================================
+   学習記録
+   ========================================================== */
 async function createRecord(env, body) {
   const date = body?.date;
   if (!DATE_RE.test(date || "")) throw new Error("日付はYYYY-MM-DD形式で指定してください");
@@ -128,6 +178,290 @@ async function computeStreak(env, todayStr) {
   return { count: streakDates.length, dates: streakDates };
 }
 
+/* ==========================================================
+   日記
+   ========================================================== */
+async function getDiary(env, date) {
+  if (!DATE_RE.test(date || "")) throw new Error("date はYYYY-MM-DD形式で指定してください");
+  const row = await env.DB.prepare(
+    "SELECT date, content, updated_at FROM diary_entries WHERE date = ?"
+  ).bind(date).first();
+  return row || { date, content: "", updated_at: null };
+}
+
+async function upsertDiary(env, body) {
+  const date = body?.date;
+  if (!DATE_RE.test(date || "")) throw new Error("日付はYYYY-MM-DD形式で指定してください");
+  const content = (body?.content || "").toString().slice(0, 2000);
+  return env.DB.prepare(
+    `INSERT INTO diary_entries (date, content, updated_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(date) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at
+     RETURNING date, content, updated_at`
+  ).bind(date, content).first();
+}
+
+/* ==========================================================
+   タスク達成ストリーク（タスク完了・持ち物全チェックで加算）
+   学習記録の連続日数（computeStreak）とは別カウント。
+   ========================================================== */
+async function getTaskStreak(env) {
+  const row = await env.DB.prepare("SELECT * FROM task_streak WHERE id = 1").first();
+  return row || { current_count: 0, longest_count: 0, last_completed_date: null };
+}
+
+async function recordTaskActivity(env, today = todayISOInJST()) {
+  const current = await getTaskStreak(env);
+  if (current.last_completed_date === today) return current; // 今日はすでに記録済み
+
+  const isConsecutive = current.last_completed_date === yesterdayISOInJST(today);
+  const newCurrent = isConsecutive ? current.current_count + 1 : 1;
+  const newLongest = Math.max(current.longest_count, newCurrent);
+
+  await env.DB.prepare(
+    "UPDATE task_streak SET current_count = ?, longest_count = ?, last_completed_date = ? WHERE id = 1"
+  ).bind(newCurrent, newLongest, today).run();
+
+  return { current_count: newCurrent, longest_count: newLongest, last_completed_date: today };
+}
+
+/* ==========================================================
+   タスク管理（宿題・提出物・自由タスク）
+   優先度スコア = 重要度係数（提出物3 > 宿題2 > 自由1）÷ 残り日数。
+   締切当日・超過は最優先、締切なしは常に低優先固定。
+   ========================================================== */
+const TASK_TYPES = ["homework", "submission", "free"];
+const TASK_IMPORTANCE = { submission: 3, homework: 2, free: 1 };
+
+function calcPriorityScore(type, dueDate, now = new Date()) {
+  const importance = TASK_IMPORTANCE[type] ?? 1;
+  if (!dueDate) return importance * 0.5;
+  const daysLeft = diffDaysInJST(dueDate, todayISOInJST(now));
+  if (daysLeft <= 0) return importance * 100;
+  return importance / daysLeft;
+}
+
+function daysUntil(dueDate, now = new Date()) {
+  if (!dueDate) return null;
+  return diffDaysInJST(dueDate, todayISOInJST(now));
+}
+
+function withScore(row) {
+  return {
+    ...row,
+    priority_score: calcPriorityScore(row.type, row.due_date),
+    days_left: daysUntil(row.due_date),
+  };
+}
+
+function sortByPriority(rows) {
+  return rows.map(withScore).sort((a, b) => b.priority_score - a.priority_score);
+}
+
+async function listTasks(env, status) {
+  const query = status
+    ? env.DB.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC").bind(status)
+    : env.DB.prepare("SELECT * FROM tasks ORDER BY created_at DESC");
+  const { results } = await query.all();
+  return sortByPriority(results);
+}
+
+// Todayホーム：未完了タスクの優先度上位3件。
+// 前回表示日から日をまたいでいる未完了タスクは先延ばし回数を加算する。
+async function todayTasks(env) {
+  const today = todayISOInJST();
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM tasks WHERE status != 'done' ORDER BY created_at DESC"
+  ).all();
+
+  for (const t of results) {
+    if (t.last_seen_date && t.last_seen_date !== today) {
+      await env.DB.prepare(
+        "UPDATE tasks SET postponed_count = postponed_count + 1, last_seen_date = ? WHERE id = ?"
+      ).bind(today, t.id).run();
+      t.postponed_count += 1;
+    } else if (!t.last_seen_date) {
+      await env.DB.prepare("UPDATE tasks SET last_seen_date = ? WHERE id = ?").bind(today, t.id).run();
+    }
+    t.last_seen_date = today;
+  }
+
+  return sortByPriority(results).slice(0, 3);
+}
+
+async function createTask(env, body) {
+  const title = (body?.title || "").toString().trim();
+  const type = body?.type;
+  if (!title) throw new Error("タイトルを入力してください");
+  if (!TASK_TYPES.includes(type)) throw new Error("タスクの種類を選んでください");
+  const dueDate = body?.due_date || null;
+  if (dueDate && !DATE_RE.test(dueDate)) throw new Error("締切日はYYYY-MM-DD形式で指定してください");
+  const row = await env.DB.prepare(
+    `INSERT INTO tasks (title, type, due_date, status) VALUES (?, ?, ?, 'pending')
+     RETURNING *`
+  ).bind(title, type, dueDate).first();
+  return withScore(row);
+}
+
+async function updateTask(env, id, body) {
+  const existing = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(id).first();
+  if (!existing) throw new Error("タスクが見つかりません");
+  const nextTitle = body?.title !== undefined ? String(body.title).trim() : existing.title;
+  const nextDue = body?.due_date !== undefined ? body.due_date : existing.due_date;
+  const nextStatus = body?.status !== undefined ? body.status : existing.status;
+  const completedAt = nextStatus === "done" ? new Date().toISOString() : existing.completed_at;
+
+  await env.DB.prepare(
+    "UPDATE tasks SET title = ?, due_date = ?, status = ?, completed_at = ? WHERE id = ?"
+  ).bind(nextTitle, nextDue, nextStatus, completedAt, id).run();
+
+  if (nextStatus === "done" && existing.status !== "done") {
+    await recordTaskActivity(env);
+  }
+
+  const row = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(id).first();
+  return withScore(row);
+}
+
+async function deleteTask(env, id) {
+  await env.DB.prepare("DELETE FROM tasks WHERE id = ?").bind(id).run();
+  return { deleted: true };
+}
+
+// 集中モード：未完了タスクの中から次に消化すべき1件（最優先）を返す
+async function focusQueueNext(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM tasks WHERE status != 'done' ORDER BY created_at DESC"
+  ).all();
+  const scored = sortByPriority(results);
+  return scored[0] || null;
+}
+
+/* ==========================================================
+   持ち物チェックリスト（日にち指定の手動入力）
+   ========================================================== */
+async function listBelongings(env, date) {
+  if (!DATE_RE.test(date || "")) throw new Error("date はYYYY-MM-DD形式で指定してください");
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM belongings WHERE date = ? ORDER BY created_at ASC"
+  ).bind(date).all();
+  return results;
+}
+
+async function createBelonging(env, body) {
+  const date = body?.date;
+  const itemName = (body?.item_name || "").toString().trim();
+  if (!DATE_RE.test(date || "")) throw new Error("日付はYYYY-MM-DD形式で指定してください");
+  if (!itemName) throw new Error("持ち物の名前を入力してください");
+  return env.DB.prepare(
+    "INSERT INTO belongings (date, item_name) VALUES (?, ?) RETURNING *"
+  ).bind(date, itemName).first();
+}
+
+// チェックON/OFF切り替え。その日の全項目がチェック済みになったら達成ストリークを1日分記録
+async function toggleBelonging(env, id, checked) {
+  const existing = await env.DB.prepare("SELECT * FROM belongings WHERE id = ?").bind(id).first();
+  if (!existing) throw new Error("項目が見つかりません");
+
+  await env.DB.prepare("UPDATE belongings SET checked = ? WHERE id = ?").bind(checked ? 1 : 0, id).run();
+
+  if (checked && existing.date === todayISOInJST()) {
+    const { results } = await env.DB.prepare(
+      "SELECT checked FROM belongings WHERE date = ?"
+    ).bind(existing.date).all();
+    if (results.length > 0 && results.every((r) => r.checked === 1)) {
+      await recordTaskActivity(env);
+    }
+  }
+
+  return env.DB.prepare("SELECT * FROM belongings WHERE id = ?").bind(id).first();
+}
+
+async function deleteBelonging(env, id) {
+  await env.DB.prepare("DELETE FROM belongings WHERE id = ?").bind(id).run();
+  return { deleted: true };
+}
+
+/* ==========================================================
+   固定学習ブロック（曜日×時間で設定、開始中を判定）
+   ========================================================== */
+async function listStudyBlocks(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM study_blocks ORDER BY weekday ASC, start_time ASC"
+  ).all();
+  return results;
+}
+
+async function createStudyBlock(env, body) {
+  const weekday = Number(body?.weekday);
+  const startTime = body?.start_time;
+  const endTime = body?.end_time;
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw new Error("曜日を指定してください");
+  if (!TIME_RE.test(startTime || "") || !TIME_RE.test(endTime || "")) {
+    throw new Error("開始・終了時刻はHH:MM形式で指定してください");
+  }
+  if (startTime >= endTime) throw new Error("終了時刻は開始時刻より後にしてください");
+  const label = (body?.label || "").toString().trim().slice(0, 50) || null;
+  return env.DB.prepare(
+    "INSERT INTO study_blocks (weekday, start_time, end_time, label) VALUES (?, ?, ?, ?) RETURNING *"
+  ).bind(weekday, startTime, endTime, label).first();
+}
+
+async function deleteStudyBlock(env, id) {
+  await env.DB.prepare("DELETE FROM study_blocks WHERE id = ?").bind(id).run();
+  return { deleted: true };
+}
+
+// 今この瞬間アクティブな学習ブロックを返す（入力ページの通知バナー表示用）
+async function currentStudyBlock(env) {
+  const weekday = jstWeekday();
+  const hhmm = jstHHMM();
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM study_blocks WHERE weekday = ? ORDER BY start_time ASC"
+  ).bind(weekday).all();
+  return results.find((b) => b.start_time <= hhmm && hhmm < b.end_time) || null;
+}
+
+/* ==========================================================
+   週次振り返り（過去7日間：達成率・平均先延ばし回数・種類別完了数）
+   ========================================================== */
+async function weeklyReview(env) {
+  const since = daysAgoISOInJST(7);
+
+  const { results: created } = await env.DB.prepare(
+    "SELECT * FROM tasks WHERE created_at >= ?"
+  ).bind(since).all();
+  const { results: completed } = await env.DB.prepare(
+    "SELECT * FROM tasks WHERE status = 'done' AND completed_at >= ?"
+  ).bind(since).all();
+
+  const allInWindow = created || [];
+  const doneInWindow = completed || [];
+
+  const completionRate = allInWindow.length > 0 ? doneInWindow.length / allInWindow.length : null;
+  const avgPostponed = allInWindow.length > 0
+    ? allInWindow.reduce((sum, t) => sum + t.postponed_count, 0) / allInWindow.length
+    : 0;
+
+  const byType = { homework: 0, submission: 0, free: 0 };
+  for (const t of doneInWindow) byType[t.type] = (byType[t.type] ?? 0) + 1;
+
+  const streak = await getTaskStreak(env);
+
+  return {
+    since,
+    total_tasks: allInWindow.length,
+    completed_tasks: doneInWindow.length,
+    completion_rate: completionRate,
+    average_postponed_count: Number(avgPostponed.toFixed(2)),
+    completed_by_type: byType,
+    streak: { current_count: streak.current_count, longest_count: streak.longest_count },
+  };
+}
+
+/* ==========================================================
+   ルーティング
+   ========================================================== */
 async function handleApi(request, env, url) {
   const [, resource, id] = url.pathname.split("/").filter(Boolean);
   try {
@@ -147,6 +481,14 @@ async function handleApi(request, env, url) {
       if (request.method === "DELETE" && id) return json(await deleteRecord(env, id));
     }
 
+    if (resource === "diary") {
+      if (request.method === "GET") {
+        const date = url.searchParams.get("date");
+        return json(await getDiary(env, date));
+      }
+      if (request.method === "POST") return json(await upsertDiary(env, await request.json()));
+    }
+
     if (resource === "calendar" && request.method === "GET") {
       const year = Number(url.searchParams.get("year"));
       const month = Number(url.searchParams.get("month"));
@@ -157,12 +499,57 @@ async function handleApi(request, env, url) {
     if (resource === "summary" && request.method === "GET") {
       const date = url.searchParams.get("date");
       if (!DATE_RE.test(date || "")) return fail("date をYYYY-MM-DD形式で指定してください");
-      const [records, streak] = await Promise.all([
+      const [records, streak, diary] = await Promise.all([
         recordsForDate(env, date),
         computeStreak(env, date),
+        getDiary(env, date),
       ]);
       const totalMinutes = records.reduce((s, r) => s + r.duration_minutes, 0);
-      return json({ date, records, total_minutes: totalMinutes, streak: streak.count, streak_dates: streak.dates });
+      return json({
+        date,
+        records,
+        total_minutes: totalMinutes,
+        streak: streak.count,
+        streak_dates: streak.dates,
+        diary: diary.content,
+      });
+    }
+
+    if (resource === "tasks") {
+      if (request.method === "GET" && id === "today") return json(await todayTasks(env));
+      if (request.method === "GET" && id === "focus-queue") return json(await focusQueueNext(env));
+      if (request.method === "GET" && !id) return json(await listTasks(env, url.searchParams.get("status")));
+      if (request.method === "POST" && !id) return json(await createTask(env, await request.json()));
+      if (request.method === "PATCH" && id) return json(await updateTask(env, id, await request.json()));
+      if (request.method === "DELETE" && id) return json(await deleteTask(env, id));
+    }
+
+    if (resource === "belongings") {
+      if (request.method === "GET" && !id) {
+        const date = url.searchParams.get("date") || todayISOInJST();
+        return json({ date, items: await listBelongings(env, date) });
+      }
+      if (request.method === "POST" && !id) return json(await createBelonging(env, await request.json()));
+      if (request.method === "PATCH" && id) {
+        const body = await request.json();
+        return json(await toggleBelonging(env, id, !!body?.checked));
+      }
+      if (request.method === "DELETE" && id) return json(await deleteBelonging(env, id));
+    }
+
+    if (resource === "study-blocks") {
+      if (request.method === "GET" && id === "current") return json(await currentStudyBlock(env));
+      if (request.method === "GET" && !id) return json(await listStudyBlocks(env));
+      if (request.method === "POST" && !id) return json(await createStudyBlock(env, await request.json()));
+      if (request.method === "DELETE" && id) return json(await deleteStudyBlock(env, id));
+    }
+
+    if (resource === "task-streak" && request.method === "GET") {
+      return json(await getTaskStreak(env));
+    }
+
+    if (resource === "weekly-review" && request.method === "GET") {
+      return json(await weeklyReview(env));
     }
 
     return fail("not found", 404);

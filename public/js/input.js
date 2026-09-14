@@ -11,6 +11,9 @@
   const typeForm = document.getElementById("type-form");
   const newTypeName = document.getElementById("new-type-name");
   const newTypeColor = document.getElementById("new-type-color");
+  const diaryInput = document.getElementById("diary-input");
+  const diarySaveBtn = document.getElementById("diary-save-btn");
+  const diaryMessage = document.getElementById("diary-message");
 
   let types = [];
   let selectedTypeId = null;
@@ -123,6 +126,35 @@
     }
   }
 
+  async function loadDiary() {
+    const date = dateInput.value || localToday();
+    diaryMessage.textContent = "";
+    diaryMessage.classList.remove("is-error");
+    try {
+      const entry = await api(`/api/diary?date=${date}`);
+      diaryInput.value = entry.content || "";
+    } catch (err) {
+      diaryInput.value = "";
+    }
+  }
+
+  diarySaveBtn.addEventListener("click", async () => {
+    const date = dateInput.value || localToday();
+    diaryMessage.textContent = "";
+    diaryMessage.classList.remove("is-error");
+    try {
+      await api("/api/diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, content: diaryInput.value }),
+      });
+      diaryMessage.textContent = "日記を保存しました";
+    } catch (err) {
+      diaryMessage.textContent = err.message;
+      diaryMessage.classList.add("is-error");
+    }
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     formMessage.textContent = "";
@@ -168,11 +200,15 @@
     }
   });
 
-  dateInput.addEventListener("change", loadTodayList);
+  dateInput.addEventListener("change", () => {
+    loadTodayList();
+    loadDiary();
+  });
 
   (async function init() {
     dateInput.value = localToday();
     await loadTypes();
     await loadTodayList();
+    await loadDiary();
   })();
 })();
