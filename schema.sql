@@ -1,23 +1,36 @@
 -- 学習タイプ（宿題・自学・通信など、ユーザーが追加/編集可能）
+-- is_test_type = 1 のタイプは「テスト対策」として扱われ、テスト期間機能の判定に使われる
 CREATE TABLE IF NOT EXISTS study_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   color TEXT NOT NULL DEFAULT '#4C6EF5',
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_test_type INTEGER NOT NULL DEFAULT 0
+);
+
+-- テスト日（1件 = テストの日付。その2週間前からの学習でテスト期間機能を判定する）
+CREATE TABLE IF NOT EXISTS test_dates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL UNIQUE,
+  label TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- 学習記録（1件 = ある日に、あるタイプで学習した記録）
+-- task_id はタスク管理機能との連携用：タスク完了/中断時にその場で記録した学習時間を紐づける（任意・NULL可）
 CREATE TABLE IF NOT EXISTS study_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL,              -- 'YYYY-MM-DD'
   type_id INTEGER NOT NULL,
   duration_minutes INTEGER NOT NULL DEFAULT 0,
   content TEXT DEFAULT '',
+  task_id INTEGER REFERENCES tasks(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (type_id) REFERENCES study_types(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_records_date ON study_records(date);
+CREATE INDEX IF NOT EXISTS idx_records_task ON study_records(task_id);
 
 -- 日記（1件 = ある日の日記本文。1日1件、上書き保存）
 CREATE TABLE IF NOT EXISTS diary_entries (
@@ -73,7 +86,9 @@ CREATE TABLE IF NOT EXISTS task_streak (
 INSERT OR IGNORE INTO task_streak (id, current_count, longest_count) VALUES (1, 0, 0);
 
 -- 初期の学習タイプ（後からアプリのUIで自由に追加・編集できます）
-INSERT INTO study_types (name, color, sort_order) VALUES
-  ('宿題', '#D9694F', 1),
-  ('自学', '#2E8C82', 2),
-  ('通信', '#6E8F5D', 3);
+-- 「テスト」は is_test_type = 1 とし、テスト期間機能（ハイライト・限定ストリーク）の対象にする
+INSERT INTO study_types (name, color, sort_order, is_test_type) VALUES
+  ('宿題', '#D9694F', 1, 0),
+  ('自学', '#2E8C82', 2, 0),
+  ('通信', '#6E8F5D', 3, 0),
+  ('テスト', '#7C5C9E', 4, 1);

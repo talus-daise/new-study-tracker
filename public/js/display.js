@@ -11,6 +11,18 @@
   const todaySummaryEmpty = document.getElementById("today-summary-empty");
   const legendBar = document.getElementById("legend-bar");
   const diaryText = document.getElementById("diary-text");
+  const todayPie = document.getElementById("today-pie");
+  const todayGoalNote = document.getElementById("today-goal-note");
+  const testPeriodBlock = document.getElementById("test-period-block");
+  const testPeriodText = document.getElementById("test-period-text");
+  const dayDetailOverlay = document.getElementById("day-detail-overlay");
+  const dayDetailClose = document.getElementById("day-detail-close");
+  const dayDetailTitle = document.getElementById("day-detail-title");
+  const dayDetailPie = document.getElementById("day-detail-pie");
+  const dayDetailTotal = document.getElementById("day-detail-total");
+  const dayDetailGoalNote = document.getElementById("day-detail-goal-note");
+  const dayDetailList = document.getElementById("day-detail-list");
+  const dayDetailEmpty = document.getElementById("day-detail-empty");
 
   const WEEKDAY_KANJI = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -115,6 +127,153 @@
     return res.json();
   }
 
+  function formatDateJp(iso) {
+    const [, m, d] = iso.split("-");
+    return `${Number(m)}/${Number(d)}`;
+  }
+
+  // 平日は1時間30分、休日(土日)は2時間を目標学習時間とする
+  function goalMinutesFor(date) {
+    const day = date.getDay(); // 0=日, 6=土
+    return day === 0 || day === 6 ? 120 : 90;
+  }
+
+  // 「今日の学習」の円グラフ：目標学習時間を100%として、各学習タイプの割合を描く
+  function renderPieChart(container, records, goalMinutes) {
+    container.innerHTML = "";
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 36 36");
+
+    const track = document.createElementNS(svgNS, "circle");
+    track.setAttribute("cx", "18");
+    track.setAttribute("cy", "18");
+    track.setAttribute("r", "15.9155");
+    track.setAttribute("fill", "none");
+    track.setAttribute("stroke", "rgba(120, 120, 120, 0.22)");
+    track.setAttribute("stroke-width", "4");
+    svg.appendChild(track);
+
+    const totalMinutes = records.reduce((s, r) => s + r.duration_minutes, 0);
+
+    if (totalMinutes > 0 && goalMinutes > 0) {
+      const byColor = new Map();
+      for (const r of records) {
+        const pct = (r.duration_minutes / goalMinutes) * 100;
+        byColor.set(r.type_color, (byColor.get(r.type_color) || 0) + pct);
+      }
+      let segments = [...byColor.entries()].map(([color, pct]) => ({ color, pct }));
+      const sumPct = segments.reduce((s, seg) => s + seg.pct, 0);
+      if (sumPct > 100) {
+        const scale = 100 / sumPct;
+        segments = segments.map((seg) => ({ ...seg, pct: seg.pct * scale }));
+      }
+
+      const group = document.createElementNS(svgNS, "g");
+      group.setAttribute("transform", "rotate(-90 18 18)");
+      let offset = 0;
+      for (const seg of segments) {
+        if (seg.pct <= 0) continue;
+        const c = document.createElementNS(svgNS, "circle");
+        c.setAttribute("cx", "18");
+        c.setAttribute("cy", "18");
+        c.setAttribute("r", "15.9155");
+        c.setAttribute("fill", "none");
+        c.setAttribute("stroke", seg.color);
+        c.setAttribute("stroke-width", "4");
+        c.setAttribute("stroke-dasharray", `${seg.pct} ${100 - seg.pct}`);
+        c.setAttribute("stroke-dashoffset", `${-offset}`);
+        group.appendChild(c);
+        offset += seg.pct;
+      }
+      svg.appendChild(group);
+    }
+
+    container.appendChild(svg);
+
+    const label = document.createElement("span");
+    label.className = "pie-center-label";
+    const pct = goalMinutes > 0 ? Math.round((totalMinutes / goalMinutes) * 100) : 0;
+    label.textContent = `${pct}%`;
+    container.appendChild(label);
+  }
+
+  // テスト期間限定連続学習・次のテスト予定の表示
+  function renderTestPeriod(testPeriod) {
+    if (!testPeriod || (!testPeriod.active && !testPeriod.upcoming)) {
+      testPeriodBlock.hidden = true;
+      return;
+    }
+    if (testPeriod.active) {
+      const a = testPeriod.active;
+      const labelPart = a.label ? `「${a.label}」` : "";
+      const untilPart = a.days_until_test <= 0 ? "今日がテスト当日" : `テストまであと${a.days_until_test}日`;
+      testPeriodText.innerHTML =
+        `テスト期間限定連続学習 <strong>${a.streak_count}日</strong>` +
+        `　${formatDateJp(a.date)}${labelPart}のテスト・${untilPart}`;
+    } else {
+      const u = testPeriod.upcoming;
+      const labelPart = u.label ? `「${u.label}」` : "";
+      testPeriodText.textContent = `次のテスト：${formatDateJp(u.date)}${labelPart}`;
+    }
+    testPeriodBlock.hidden = false;
+  }
+
+  // 日別の学習詳細（カレンダーの日付タップで開く）
+  async function openDayDetail(dateStr) {
+    const summary = await api(`/api/summary?date=${dateStr}`);
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const goalMinutes = goalMinutesFor(dateObj);
+
+    dayDetailTitle.textContent = `${y}年${m}月${d}日（${WEEKDAY_KANJI[dateObj.getDay()]}）の学習`;
+    dayDetailTotal.textContent = `合計 ${formatMinutes(summary.total_minutes)}`;
+    dayDetailGoalNote.textContent = `目標 ${formatMinutes(goalMinutes)}`;
+    renderPieChart(dayDetailPie, summary.records, goalMinutes);
+
+    renderRecordList(dayDetailList, dayDetailEmpty, summary.records);
+
+    dayDetailOverlay.hidden = false;
+  }
+
+  function closeDayDetail() {
+    dayDetailOverlay.hidden = true;
+  }
+
+  dayDetailClose.addEventListener("click", closeDayDetail);
+  dayDetailOverlay.addEventListener("click", (e) => {
+    if (e.target === dayDetailOverlay) closeDayDetail();
+  });
+
+  // 学習記録の一覧を描画する（今日の学習・日別詳細で共用）。タスク完了時に記録された分には🔗を付ける
+  function renderRecordList(container, emptyEl, records) {
+    container.innerHTML = "";
+    emptyEl.style.display = records.length ? "none" : "block";
+    for (const r of records) {
+      const li = document.createElement("li");
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.setProperty("--dot-color", r.type_color);
+      const label = document.createElement("span");
+      label.textContent = `${r.type_name}${r.content ? " — " + r.content : ""}`;
+      label.style.flex = "1";
+      const meta = document.createElement("span");
+      meta.className = "entry-meta";
+      meta.textContent = formatMinutes(r.duration_minutes);
+      const parts = [dot, label];
+      if (r.task_id) {
+        const link = document.createElement("span");
+        link.className = "entry-task-link";
+        link.textContent = "🔗";
+        link.title = "タスク完了時に記録した学習";
+        parts.push(link);
+      }
+      parts.push(meta);
+      li.append(...parts);
+      container.appendChild(li);
+    }
+  }
+
   function formatMinutes(min) {
     if (min >= 60) {
       const h = Math.floor(min / 60);
@@ -186,44 +345,57 @@
 
       const info = data[dateStr];
       if (info) {
-        const dots = document.createElement("div");
-        dots.className = "day-dots";
-        for (const color of info.colors) {
-          const dot = document.createElement("span");
-          dot.className = "dot";
-          dot.style.setProperty("--dot-color", color);
-          dots.appendChild(dot);
-        }
-        cell.appendChild(dots);
+        if (info.is_test_day) cell.classList.add("is-test-day");
+        if (info.is_test_highlight) cell.classList.add("is-test-highlight");
       }
+
+      // 学習内容の概要バー：目標学習時間を100%として、学習タイプごとの割合を色分けした帯で示す
+      const weekday = new Date(year, month - 1, day).getDay();
+      const dayGoal = weekday === 0 || weekday === 6 ? 120 : 90;
+      const bar = document.createElement("div");
+      bar.className = "day-bar";
+      if (info && info.breakdown && info.breakdown.length) {
+        let segments = info.breakdown.map((b) => ({
+          color: b.color,
+          pct: (b.minutes / dayGoal) * 100,
+        }));
+        const sumPct = segments.reduce((s, seg) => s + seg.pct, 0);
+        if (sumPct > 100) {
+          const scale = 100 / sumPct;
+          segments = segments.map((seg) => ({ ...seg, pct: seg.pct * scale }));
+        }
+        for (const seg of segments) {
+          if (seg.pct <= 0) continue;
+          const s = document.createElement("span");
+          s.className = "day-bar-seg";
+          s.style.width = `${seg.pct}%`;
+          s.style.backgroundColor = seg.color;
+          bar.appendChild(s);
+        }
+      }
+      cell.appendChild(bar);
+
+      cell.addEventListener("click", () => openDayDetail(dateStr));
+
       calendarGrid.appendChild(cell);
     }
   }
 
   async function renderSummary() {
-    const todayStr = localDateStr(new Date());
+    const now = new Date();
+    const todayStr = localDateStr(now);
     const summary = await api(`/api/summary?date=${todayStr}`);
 
     streakNumber.textContent = summary.streak;
     streakDateSet = new Set(summary.streak_dates);
 
+    const goalMinutes = goalMinutesFor(now);
     todayTotal.textContent = `合計 ${formatMinutes(summary.total_minutes)}`;
-    todaySummaryList.innerHTML = "";
-    todaySummaryEmpty.style.display = summary.records.length ? "none" : "block";
-    for (const r of summary.records) {
-      const li = document.createElement("li");
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.style.setProperty("--dot-color", r.type_color);
-      const label = document.createElement("span");
-      label.textContent = `${r.type_name}${r.content ? " — " + r.content : ""}`;
-      label.style.flex = "1";
-      const meta = document.createElement("span");
-      meta.className = "entry-meta";
-      meta.textContent = formatMinutes(r.duration_minutes);
-      li.append(dot, label, meta);
-      todaySummaryList.appendChild(li);
-    }
+    todayGoalNote.textContent = `目標 ${formatMinutes(goalMinutes)}`;
+    renderPieChart(todayPie, summary.records, goalMinutes);
+    renderTestPeriod(summary.test_period);
+
+    renderRecordList(todaySummaryList, todaySummaryEmpty, summary.records);
 
     if (summary.diary && summary.diary.trim()) {
       diaryText.textContent = summary.diary;

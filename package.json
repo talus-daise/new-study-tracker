@@ -5,7 +5,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:init:local": "wrangler d1 execute study-tracker-db --local --file=schema.sql",
-    "db:init:remote": "wrangler d1 execute study-tracker-db --remote --file=schema.sql"
+    "db:init:remote": "wrangler d1 execute study-tracker-db --remote --file=schema.sql",
+    "db:migrate:test-period:local": "wrangler d1 execute study-tracker-db --local --file=migrations/0001_add_test_period.sql",
+    "db:migrate:test-period:remote": "wrangler d1 execute study-tracker-db --remote --file=migrations/0001_add_test_period.sql"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

@@ -131,6 +131,21 @@
       </form>
     </details>
 
+    <details class="card test-manage-card">
+      <summary>テスト期間を設定する</summary>
+      <p class="test-manage-hint">
+        テスト日を登録すると、その2週間前から学習タイプ「テスト」で毎日記録した場合に、
+        表示ページでテスト日が特別にハイライトされ、期間限定の連続記録日数も表示されます。
+      </p>
+      <ul id="test-date-list" class="test-date-list"></ul>
+      <p id="test-date-empty" class="empty-note">まだテスト日は登録されていません</p>
+      <form id="test-date-form" class="test-date-form">
+        <input type="date" id="test-date-input" required aria-label="テスト日">
+        <input type="text" id="test-date-label-input" placeholder="教科名など（任意）" maxlength="50">
+        <button type="submit" class="btn-secondary">登録する</button>
+      </form>
+    </details>
+
     <details class="card weekly-review-card">
       <summary>今週の振り返り</summary>
       <div class="review-rate-row">
@@ -151,6 +166,7 @@
         </div>
       </div>
       <ul id="review-by-type" class="review-by-type"></ul>
+      <p id="review-study-minutes" class="review-study-minutes"></p>
       <p id="review-longest" class="empty-note"></p>
     </details>
 
@@ -176,8 +192,21 @@
           <span id="focus-type-badge" class="task-type-badge"></span>
           <p id="focus-title" class="focus-title"></p>
           <span id="focus-days" class="task-days focus-days"></span>
+          <span id="focus-elapsed" class="focus-elapsed">0:00</span>
         </div>
         <button type="button" id="focus-complete-btn" class="btn-primary focus-complete-btn">完了して次へ</button>
+      </div>
+      <div id="focus-log" class="focus-log" hidden>
+        <p id="focus-log-title" class="focus-log-title"></p>
+        <div class="focus-log-time-row">
+          <button type="button" class="time-adj" data-target="focus-log-minutes" data-delta="-5">−5</button>
+          <input type="number" id="focus-log-minutes" min="0" max="600" step="1" inputmode="numeric">
+          <span class="focus-log-unit">分</span>
+          <button type="button" class="time-adj" data-target="focus-log-minutes" data-delta="5">+5</button>
+        </div>
+        <div id="focus-log-type-picker" class="type-picker"></div>
+        <button type="button" id="focus-log-save-btn" class="btn-primary"></button>
+        <button type="button" id="focus-log-skip-btn" class="btn-secondary is-outline"></button>
       </div>
       <div id="focus-break" class="focus-break" hidden>
         <p class="focus-break-time">5分</p>
@@ -190,6 +219,23 @@
         <p id="focus-empty-count" class="focus-empty-count"></p>
         <button type="button" id="focus-empty-exit-btn" class="btn-primary">今日の画面に戻る</button>
       </div>
+    </div>
+  </div>
+
+  <div id="task-log-overlay" class="day-detail-overlay" hidden>
+    <div class="day-detail-card task-log-card">
+      <button type="button" id="task-log-close" class="day-detail-close" aria-label="閉じる">×</button>
+      <h3 class="day-detail-title">学習時間を記録しますか？</h3>
+      <p id="task-log-task-title" class="task-log-task-title"></p>
+      <div class="focus-log-time-row">
+        <button type="button" class="time-adj" data-target="task-log-minutes" data-delta="-5">−5</button>
+        <input type="number" id="task-log-minutes" min="0" max="600" step="1" inputmode="numeric" value="15">
+        <span class="focus-log-unit">分</span>
+        <button type="button" class="time-adj" data-target="task-log-minutes" data-delta="5">+5</button>
+      </div>
+      <div id="task-log-type-picker" class="type-picker"></div>
+      <button type="button" id="task-log-save-btn" class="btn-primary">記録して完了にする</button>
+      <button type="button" id="task-log-skip-btn" class="btn-secondary is-outline">記録せず完了にする</button>
     </div>
   </div>
 

@@ -45,6 +45,7 @@
   const reviewAvgPostponed = document.getElementById("review-avg-postponed");
   const reviewStreak = document.getElementById("review-streak");
   const reviewByType = document.getElementById("review-by-type");
+  const reviewStudyMinutes = document.getElementById("review-study-minutes");
   const reviewLongest = document.getElementById("review-longest");
 
   // --- 集中モード ---
@@ -55,7 +56,14 @@
   const focusTypeBadge = document.getElementById("focus-type-badge");
   const focusTitle = document.getElementById("focus-title");
   const focusDays = document.getElementById("focus-days");
+  const focusElapsed = document.getElementById("focus-elapsed");
   const focusCompleteBtn = document.getElementById("focus-complete-btn");
+  const focusLog = document.getElementById("focus-log");
+  const focusLogTitle = document.getElementById("focus-log-title");
+  const focusLogMinutes = document.getElementById("focus-log-minutes");
+  const focusLogTypePicker = document.getElementById("focus-log-type-picker");
+  const focusLogSaveBtn = document.getElementById("focus-log-save-btn");
+  const focusLogSkipBtn = document.getElementById("focus-log-skip-btn");
   const focusBreak = document.getElementById("focus-break");
   const focusBreakMsg = document.getElementById("focus-break-msg");
   const focusContinueBtn = document.getElementById("focus-continue-btn");
@@ -64,8 +72,25 @@
   const focusEmptyCount = document.getElementById("focus-empty-count");
   const focusEmptyExitBtn = document.getElementById("focus-empty-exit-btn");
 
+  // --- タスク完了時の学習記録（学習記録機能との連携） ---
+  const taskLogOverlay = document.getElementById("task-log-overlay");
+  const taskLogClose = document.getElementById("task-log-close");
+  const taskLogTaskTitle = document.getElementById("task-log-task-title");
+  const taskLogMinutes = document.getElementById("task-log-minutes");
+  const taskLogTypePicker = document.getElementById("task-log-type-picker");
+  const taskLogSaveBtn = document.getElementById("task-log-save-btn");
+  const taskLogSkipBtn = document.getElementById("task-log-skip-btn");
+
   let selectedTaskType = "homework";
   let focusDoneCount = 0;
+  let studyTypes = [];
+  let currentFocusTask = null;
+  let focusStartedAt = null;
+  let focusElapsedTimer = null;
+  let focusLogMode = null; // 'complete' | 'cancel'
+  let focusLogSelectedTypeId = null;
+  let taskLogPendingTask = null;
+  let taskLogSelectedTypeId = null;
 
   function localToday() {
     const d = new Date();
@@ -95,6 +120,72 @@
     return "normal";
   }
 
+  function formatMinutes(min) {
+    if (min >= 60) {
+      const h = Math.floor(min / 60);
+      const m = min % 60;
+      return m ? `${h}時間${m}分` : `${h}時間`;
+    }
+    return `${min}分`;
+  }
+
+  /* ---------- タスク完了時の学習記録（学習記録機能との連携） ----------
+     タスクのタイプ（宿題/提出物/自由）から、記録する学習タイプの初期値をおすすめする。
+     学習タイプの名前は入力ページで自由に変更できるため、名前が一致しなければ先頭のタイプを使う。 */
+  async function fetchStudyTypes() {
+    try {
+      studyTypes = await api("/api/types");
+    } catch (err) {
+      studyTypes = [];
+    }
+  }
+
+  function guessStudyTypeId(taskType) {
+    const nameGuess = { homework: "宿題", submission: "宿題", free: "自学" }[taskType];
+    const match = studyTypes.find((t) => t.name === nameGuess);
+    return (match || studyTypes[0])?.id ?? null;
+  }
+
+  // 学習タイプ選択チップを描画する（円グラフのタイプ選択と同じ見た目を、集中モード/タスク完了の記録フォームで使い回す）
+  function renderStudyTypePicker(container, selectedId, onSelect) {
+    container.innerHTML = "";
+    for (const t of studyTypes) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "type-chip-btn" + (t.id === selectedId ? " is-selected" : "");
+      btn.style.setProperty("--chip-color", t.color);
+      btn.textContent = t.name;
+      btn.addEventListener("click", () => onSelect(t.id));
+      container.appendChild(btn);
+    }
+  }
+
+  function bindTimeAdjustButtons(root) {
+    root.querySelectorAll(".time-adj").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.target);
+        const delta = Number(btn.dataset.delta);
+        const next = Math.max(0, (Number(input.value) || 0) + delta);
+        input.value = String(next);
+      });
+    });
+  }
+
+  async function logStudyForTask(task, minutes, typeId) {
+    if (minutes <= 0 || !typeId) return;
+    await api("/api/records", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        date: localToday(),
+        type_id: typeId,
+        duration_minutes: minutes,
+        content: task.title,
+        task_id: task.id,
+      }),
+    });
+  }
+
   /* ---------- タスク ---------- */
 
   function renderTaskItem(task, { showStart }) {
@@ -121,6 +212,13 @@
       postponed.className = "task-postponed";
       postponed.textContent = `先延ばし ${task.postponed_count}回`;
       info.appendChild(postponed);
+    }
+
+    if (task.studied_minutes > 0) {
+      const studied = document.createElement("span");
+      studied.className = "task-studied";
+      studied.textContent = `📖 ${formatMinutes(task.studied_minutes)}`;
+      info.appendChild(studied);
     }
 
     const days = document.createElement("span");
@@ -152,13 +250,17 @@
     doneBtn.className = "btn-chip" + (task.status === "done" ? " is-outline" : "");
     doneBtn.textContent = task.status === "done" ? "取り消す" : "完了";
     doneBtn.addEventListener("click", async () => {
-      await api(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ status: task.status === "done" ? "pending" : "done" }),
-      });
-      await refreshTasks();
-      await refreshWeeklyReview();
+      if (task.status === "done") {
+        await api(`/api/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ status: "pending" }),
+        });
+        await refreshTasks();
+        await refreshWeeklyReview();
+      } else {
+        openTaskLogOverlay(task);
+      }
     });
     actions.appendChild(doneBtn);
 
@@ -228,6 +330,55 @@
       taskMessage.classList.add("is-error");
     }
   });
+
+  /* ---------- タスク完了時の学習記録フォーム（一覧の「完了」から） ---------- */
+
+  function renderTaskLogPicker() {
+    renderStudyTypePicker(taskLogTypePicker, taskLogSelectedTypeId, (id) => {
+      taskLogSelectedTypeId = id;
+      renderTaskLogPicker();
+    });
+  }
+
+  function openTaskLogOverlay(task) {
+    taskLogPendingTask = task;
+    taskLogTaskTitle.textContent = task.title;
+    taskLogMinutes.value = "15";
+    taskLogSelectedTypeId = guessStudyTypeId(task.type);
+    renderTaskLogPicker();
+    taskLogOverlay.hidden = false;
+  }
+
+  function closeTaskLogOverlay() {
+    taskLogOverlay.hidden = true;
+    taskLogPendingTask = null;
+  }
+
+  async function finishTaskLog(shouldLog) {
+    const task = taskLogPendingTask;
+    if (!task) return;
+    try {
+      if (shouldLog) {
+        const minutes = Math.max(0, Math.floor(Number(taskLogMinutes.value) || 0));
+        await logStudyForTask(task, minutes, taskLogSelectedTypeId);
+      }
+      await api(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status: "done" }),
+      });
+    } catch (err) {
+      alert(err.message);
+    }
+    closeTaskLogOverlay();
+    await refreshTasks();
+    await refreshWeeklyReview();
+  }
+
+  taskLogSaveBtn.addEventListener("click", () => finishTaskLog(true));
+  taskLogSkipBtn.addEventListener("click", () => finishTaskLog(false));
+  taskLogClose.addEventListener("click", closeTaskLogOverlay);
+  bindTimeAdjustButtons(taskLogOverlay);
 
   /* ---------- 持ち物チェック ---------- */
 
@@ -414,19 +565,56 @@
       reviewByType.appendChild(li);
     }
     reviewLongest.textContent = `最長ストリーク: ${data.streak.longest_count}日`;
+
+    if (reviewStudyMinutes) {
+      reviewStudyMinutes.textContent =
+        `今週の学習時間 合計 ${formatMinutes(data.total_study_minutes)}` +
+        (data.study_minutes_from_tasks > 0
+          ? `（うちタスク完了時の記録 ${formatMinutes(data.study_minutes_from_tasks)}）`
+          : "");
+    }
   }
 
   /* ---------- 集中モード ---------- */
 
   function showFocusScreen(name) {
     focusNormal.hidden = name !== "normal";
+    focusLog.hidden = name !== "log";
     focusBreak.hidden = name !== "break";
     focusEmpty.hidden = name !== "empty";
+  }
+
+  function startFocusTimer() {
+    focusStartedAt = Date.now();
+    updateFocusElapsed();
+    if (focusElapsedTimer) clearInterval(focusElapsedTimer);
+    focusElapsedTimer = setInterval(updateFocusElapsed, 1000);
+  }
+
+  function stopFocusTimer() {
+    if (focusElapsedTimer) {
+      clearInterval(focusElapsedTimer);
+      focusElapsedTimer = null;
+    }
+  }
+
+  function updateFocusElapsed() {
+    if (!focusStartedAt || !focusElapsed) return;
+    const sec = Math.floor((Date.now() - focusStartedAt) / 1000);
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    focusElapsed.textContent = `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function elapsedMinutesNow() {
+    if (!focusStartedAt) return 0;
+    return Math.round((Date.now() - focusStartedAt) / 60000);
   }
 
   async function loadFocusNext() {
     const next = await api("/api/tasks/focus-queue");
     if (!next) {
+      currentFocusTask = null;
       showFocusScreen("empty");
       focusEmptyCount.textContent = `${focusDoneCount}コ終わらせた。お疲れさま。`;
       return;
@@ -436,6 +624,7 @@
       headers: JSON_HEADERS,
       body: JSON.stringify({ status: "in_progress" }),
     });
+    currentFocusTask = next;
     showFocusScreen("normal");
     focusCountLabel.textContent = `今 ${focusDoneCount + 1} コ目`;
     const meta = TASK_TYPE_META[next.type] || { label: next.type, color: "var(--graphite-soft)" };
@@ -444,7 +633,7 @@
     focusTitle.textContent = next.title;
     focusDays.dataset.state = taskDaysState(next.days_left);
     focusDays.textContent = taskDaysLabel(next.days_left);
-    focusCompleteBtn.dataset.taskId = next.id;
+    startFocusTimer();
   }
 
   function openFocusOverlay() {
@@ -454,24 +643,18 @@
   }
 
   function closeFocusOverlay() {
+    stopFocusTimer();
     focusOverlay.hidden = true;
+    currentFocusTask = null;
     refreshTasks();
     refreshWeeklyReview();
   }
 
   focusStartBtn.addEventListener("click", openFocusOverlay);
-  focusCancelBtn.addEventListener("click", closeFocusOverlay);
   focusExitBtn.addEventListener("click", closeFocusOverlay);
   focusEmptyExitBtn.addEventListener("click", closeFocusOverlay);
 
-  focusCompleteBtn.addEventListener("click", async () => {
-    const id = focusCompleteBtn.dataset.taskId;
-    if (!id) return;
-    await api(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ status: "done" }),
-    });
+  function proceedAfterComplete() {
     focusDoneCount += 1;
     if (focusDoneCount % 3 === 0) {
       showFocusScreen("break");
@@ -479,7 +662,70 @@
     } else {
       loadFocusNext();
     }
+  }
+
+  // 何分やったか・どの学習タイプで記録するかを確認する画面を開く
+  // mode: 'complete'（完了して記録） / 'cancel'（中断したが途中まで記録）
+  function openFocusLog(mode) {
+    if (!currentFocusTask) return;
+    focusLogMode = mode;
+    stopFocusTimer();
+    showFocusScreen("log");
+    focusLogTitle.textContent = mode === "complete" ? "お疲れさま！何分やった？" : "中断した分を記録する？";
+    focusLogMinutes.value = String(Math.max(1, elapsedMinutesNow()));
+    focusLogSelectedTypeId = guessStudyTypeId(currentFocusTask.type);
+    renderFocusLogPicker();
+    focusLogSaveBtn.textContent = mode === "complete" ? "記録して完了" : "記録して中断";
+    focusLogSkipBtn.textContent = mode === "complete" ? "記録せず完了" : "記録せず中断";
+  }
+
+  function renderFocusLogPicker() {
+    renderStudyTypePicker(focusLogTypePicker, focusLogSelectedTypeId, (id) => {
+      focusLogSelectedTypeId = id;
+      renderFocusLogPicker();
+    });
+  }
+
+  focusCancelBtn.addEventListener("click", () => {
+    if (elapsedMinutesNow() >= 1) {
+      openFocusLog("cancel");
+    } else {
+      closeFocusOverlay();
+    }
   });
+
+  focusCompleteBtn.addEventListener("click", () => {
+    openFocusLog("complete");
+  });
+
+  async function finishFocusLog(shouldLog) {
+    const task = currentFocusTask;
+    if (!task) return;
+    try {
+      if (shouldLog) {
+        const minutes = Math.max(0, Math.floor(Number(focusLogMinutes.value) || 0));
+        await logStudyForTask(task, minutes, focusLogSelectedTypeId);
+      }
+      if (focusLogMode === "complete") {
+        await api(`/api/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ status: "done" }),
+        });
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+    if (focusLogMode === "complete") {
+      proceedAfterComplete();
+    } else {
+      closeFocusOverlay();
+    }
+  }
+
+  focusLogSaveBtn.addEventListener("click", () => finishFocusLog(true));
+  focusLogSkipBtn.addEventListener("click", () => finishFocusLog(false));
+  bindTimeAdjustButtons(focusLog);
 
   focusContinueBtn.addEventListener("click", loadFocusNext);
 
@@ -489,6 +735,7 @@
     initWeekdaySelect();
     renderTaskTypePicker();
     belongingDateInput.value = localToday();
+    await fetchStudyTypes();
     await Promise.all([refreshTasks(), refreshBelongings(), refreshBlocks(), refreshWeeklyReview()]);
     checkStudyBlockBanner();
     setInterval(checkStudyBlockBanner, 30000);

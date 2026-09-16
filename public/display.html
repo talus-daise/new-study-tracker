@@ -48,9 +48,20 @@
         <span id="streak-number" class="streak-number">0</span>
         <span class="streak-unit">日</span>
       </div>
+      <div id="test-period-block" class="test-period-block" hidden>
+        <span class="test-period-icon" aria-hidden="true">🎯</span>
+        <span id="test-period-text" class="test-period-text"></span>
+      </div>
+
       <div class="today-summary-block">
         <h2>今日の学習</h2>
-        <p id="today-total" class="today-total">合計 0分</p>
+        <div class="today-summary-top">
+          <div id="today-pie" class="today-pie" aria-hidden="true"></div>
+          <div class="today-summary-top-text">
+            <p id="today-total" class="today-total">合計 0分</p>
+            <p id="today-goal-note" class="today-goal-note"></p>
+          </div>
+        </div>
         <ul id="today-summary-list" class="today-summary-list"></ul>
         <p id="today-summary-empty" class="empty-note">今日はまだ記録がありません</p>
       </div>
@@ -63,6 +74,22 @@
 
     <footer class="legend-bar" id="legend-bar"></footer>
     <div class="dim-overlay" aria-hidden="true"></div>
+  </div>
+
+  <div id="day-detail-overlay" class="day-detail-overlay" hidden>
+    <div class="day-detail-card">
+      <button type="button" id="day-detail-close" class="day-detail-close" aria-label="閉じる">×</button>
+      <h3 id="day-detail-title" class="day-detail-title"></h3>
+      <div class="day-detail-top">
+        <div id="day-detail-pie" class="day-detail-pie" aria-hidden="true"></div>
+        <div class="day-detail-top-text">
+          <p id="day-detail-total" class="day-detail-total"></p>
+          <p id="day-detail-goal-note" class="day-detail-goal-note"></p>
+        </div>
+      </div>
+      <ul id="day-detail-list" class="day-detail-list"></ul>
+      <p id="day-detail-empty" class="empty-note">この日はまだ記録がありません</p>
+    </div>
   </div>
 
   <script src="/js/display.js"></script>

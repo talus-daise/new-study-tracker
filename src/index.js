@@ -51,6 +51,13 @@ function diffDaysInJST(dueISO, baseISO) {
   return Math.round((due.getTime() - base.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// 'YYYY-MM-DD' に n日を加算/減算した日付文字列を返す（n は負数可）
+function addDaysISO(dateISO, n) {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function jstWeekday(now = new Date()) {
   return shiftToJST(now).getUTCDay();
 }
@@ -113,11 +120,12 @@ async function createRecord(env, body) {
   if (!typeId) throw new Error("学習タイプを選択してください");
   const minutes = Math.max(0, Math.floor(Number(body?.duration_minutes) || 0));
   const content = (body?.content || "").toString().slice(0, 500);
+  const taskId = body?.task_id ? Number(body.task_id) || null : null;
   return env.DB.prepare(
-    `INSERT INTO study_records (date, type_id, duration_minutes, content)
-     VALUES (?, ?, ?, ?)
-     RETURNING id, date, type_id, duration_minutes, content, created_at`
-  ).bind(date, typeId, minutes, content).first();
+    `INSERT INTO study_records (date, type_id, duration_minutes, content, task_id)
+     VALUES (?, ?, ?, ?, ?)
+     RETURNING id, date, type_id, duration_minutes, content, task_id, created_at`
+  ).bind(date, typeId, minutes, content, taskId).first();
 }
 
 async function deleteRecord(env, id) {
@@ -128,7 +136,7 @@ async function deleteRecord(env, id) {
 async function recordsForDate(env, date) {
   if (!DATE_RE.test(date || "")) throw new Error("date はYYYY-MM-DD形式で指定してください");
   const { results } = await env.DB.prepare(
-    `SELECT r.id, r.date, r.type_id, r.duration_minutes, r.content, r.created_at,
+    `SELECT r.id, r.date, r.type_id, r.duration_minutes, r.content, r.task_id, r.created_at,
             t.name AS type_name, t.color AS type_color
      FROM study_records r JOIN study_types t ON t.id = r.type_id
      WHERE r.date = ? ORDER BY r.created_at ASC`
@@ -148,11 +156,40 @@ async function calendarData(env, year, month) {
 
   const byDate = {};
   for (const row of results) {
-    const entry = (byDate[row.date] ||= { colors: [], total_minutes: 0 });
-    if (!entry.colors.includes(row.type_color)) entry.colors.push(row.type_color);
+    const entry = (byDate[row.date] ||= { total_minutes: 0, by_color: {} });
     entry.total_minutes += row.duration_minutes;
+    entry.by_color[row.type_color] = (entry.by_color[row.type_color] || 0) + row.duration_minutes;
   }
-  return byDate;
+
+  // テスト日の情報をマージ（テスト当日は記録が無い日もあるのでここで枠を作る）
+  const { results: testRows } = await env.DB.prepare(
+    "SELECT date, label FROM test_dates WHERE date BETWEEN ? AND ?"
+  ).bind(start, end).all();
+  if (testRows.length) {
+    const typeIds = await testTypeIds(env);
+    const highlighted = await testHighlightDateSet(env, testRows, typeIds);
+    for (const row of testRows) {
+      const entry = (byDate[row.date] ||= { total_minutes: 0, by_color: {} });
+      entry.is_test_day = true;
+      entry.test_label = row.label || "";
+      entry.is_test_highlight = highlighted.has(row.date);
+    }
+  }
+
+  // by_color（内部用の集計マップ）をフロント向けの配列に変換して返す
+  const out = {};
+  for (const [date, entry] of Object.entries(byDate)) {
+    out[date] = {
+      total_minutes: entry.total_minutes,
+      breakdown: Object.entries(entry.by_color).map(([color, minutes]) => ({ color, minutes })),
+      ...(entry.is_test_day ? {
+        is_test_day: true,
+        test_label: entry.test_label,
+        is_test_highlight: entry.is_test_highlight,
+      } : {}),
+    };
+  }
+  return out;
 }
 
 // 指定日から遡って連続で記録がある日数と、その日付一覧を返す。
@@ -176,6 +213,118 @@ async function computeStreak(env, todayStr) {
     cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
   return { count: streakDates.length, dates: streakDates };
+}
+
+/* ==========================================================
+   テスト期間機能
+   テスト日を登録すると、その2週間前(14日前)からテスト当日までが
+   「テスト期間」になる。期間中に学習タイプ「テスト」(is_test_type=1)で
+   毎日記録すると、テスト期間限定の連続記録日数として数える。
+   さらに、テスト当日の前日までの14日間すべてに記録があれば、
+   テスト当日をカレンダー上で特別にハイライトする。
+   ========================================================== */
+const TEST_PREP_DAYS = 14;
+
+async function listTestDates(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, date, label FROM test_dates ORDER BY date ASC"
+  ).all();
+  return results;
+}
+
+async function createTestDate(env, body) {
+  const date = body?.date;
+  if (!DATE_RE.test(date || "")) throw new Error("日付はYYYY-MM-DD形式で指定してください");
+  const label = (body?.label || "").toString().trim().slice(0, 50);
+  return env.DB.prepare(
+    `INSERT INTO test_dates (date, label) VALUES (?, ?)
+     ON CONFLICT(date) DO UPDATE SET label = excluded.label
+     RETURNING id, date, label`
+  ).bind(date, label).first();
+}
+
+async function deleteTestDate(env, id) {
+  await env.DB.prepare("DELETE FROM test_dates WHERE id = ?").bind(id).run();
+  return { deleted: true };
+}
+
+// 「テスト対策」として扱う学習タイプのID一覧
+async function testTypeIds(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT id FROM study_types WHERE is_test_type = 1"
+  ).all();
+  return results.map((r) => r.id);
+}
+
+// 指定した日付範囲内で、テストタイプの記録がある日付の集合を返す
+async function studiedTestDateSet(env, typeIds, startISO, endISO) {
+  if (!typeIds.length) return new Set();
+  const placeholders = typeIds.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    `SELECT DISTINCT date FROM study_records WHERE date BETWEEN ? AND ? AND type_id IN (${placeholders})`
+  ).bind(startISO, endISO, ...typeIds).all();
+  return new Set(results.map((r) => r.date));
+}
+
+// テスト日のうち、前日までの14日間すべてにテストタイプの記録があるものの集合（ハイライト対象）
+async function testHighlightDateSet(env, testDates, typeIds) {
+  const highlighted = new Set();
+  if (!typeIds.length) return highlighted;
+  for (const td of testDates) {
+    const prepStart = addDaysISO(td.date, -TEST_PREP_DAYS);
+    const prepEnd = addDaysISO(td.date, -1);
+    const studied = await studiedTestDateSet(env, typeIds, prepStart, prepEnd);
+    let complete = true;
+    let cursor = prepStart;
+    for (let i = 0; i < TEST_PREP_DAYS; i++) {
+      if (!studied.has(cursor)) { complete = false; break; }
+      cursor = addDaysISO(cursor, 1);
+    }
+    if (complete) highlighted.add(td.date);
+  }
+  return highlighted;
+}
+
+// 表示ページ用：現在の(または直近の)テスト期間の状況をまとめて返す
+async function testPeriodStatus(env, todayStr) {
+  const testDates = await listTestDates(env);
+  const typeIds = await testTypeIds(env);
+
+  const upcoming = testDates.find((td) => td.date >= todayStr) || null;
+
+  let active = null;
+  for (const td of testDates) {
+    const prepStart = addDaysISO(td.date, -TEST_PREP_DAYS);
+    if (todayStr >= prepStart && todayStr <= td.date) { active = td; break; }
+  }
+
+  const result = {
+    upcoming: upcoming ? { date: upcoming.date, label: upcoming.label } : null,
+    active: null,
+  };
+
+  if (active && typeIds.length) {
+    const prepStart = addDaysISO(active.date, -TEST_PREP_DAYS);
+    const studied = await studiedTestDateSet(env, typeIds, prepStart, active.date);
+
+    let cursor = todayStr;
+    if (!studied.has(cursor)) cursor = addDaysISO(cursor, -1);
+    let streakCount = 0;
+    while (cursor >= prepStart && studied.has(cursor)) {
+      streakCount += 1;
+      cursor = addDaysISO(cursor, -1);
+    }
+
+    result.active = {
+      date: active.date,
+      label: active.label,
+      prep_start: prepStart,
+      streak_count: streakCount,
+      days_until_test: diffDaysInJST(active.date, todayStr),
+    };
+  }
+
+  return result;
 }
 
 /* ==========================================================
@@ -258,12 +407,35 @@ function sortByPriority(rows) {
   return rows.map(withScore).sort((a, b) => b.priority_score - a.priority_score);
 }
 
+// タスクに紐づいた学習記録の合計時間（学習記録機能との連携：「このタスクに何分使ったか」を可視化する）
+async function studiedMinutesMap(env, taskIds) {
+  if (!taskIds.length) return {};
+  const placeholders = taskIds.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    `SELECT task_id, SUM(duration_minutes) AS total FROM study_records
+     WHERE task_id IN (${placeholders}) GROUP BY task_id`
+  ).bind(...taskIds).all();
+  const map = {};
+  for (const r of results) map[r.task_id] = r.total;
+  return map;
+}
+
+async function attachStudiedMinutes(env, rows) {
+  const map = await studiedMinutesMap(env, rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, studied_minutes: map[r.id] || 0 }));
+}
+
+async function attachStudiedMinutesOne(env, row) {
+  const map = await studiedMinutesMap(env, [row.id]);
+  return { ...row, studied_minutes: map[row.id] || 0 };
+}
+
 async function listTasks(env, status) {
   const query = status
     ? env.DB.prepare("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC").bind(status)
     : env.DB.prepare("SELECT * FROM tasks ORDER BY created_at DESC");
   const { results } = await query.all();
-  return sortByPriority(results);
+  return sortByPriority(await attachStudiedMinutes(env, results));
 }
 
 // Todayホーム：未完了タスクの優先度上位3件。
@@ -286,7 +458,7 @@ async function todayTasks(env) {
     t.last_seen_date = today;
   }
 
-  return sortByPriority(results).slice(0, 3);
+  return sortByPriority(await attachStudiedMinutes(env, results)).slice(0, 3);
 }
 
 async function createTask(env, body) {
@@ -300,7 +472,7 @@ async function createTask(env, body) {
     `INSERT INTO tasks (title, type, due_date, status) VALUES (?, ?, ?, 'pending')
      RETURNING *`
   ).bind(title, type, dueDate).first();
-  return withScore(row);
+  return withScore(await attachStudiedMinutesOne(env, row));
 }
 
 async function updateTask(env, id, body) {
@@ -320,7 +492,7 @@ async function updateTask(env, id, body) {
   }
 
   const row = await env.DB.prepare("SELECT * FROM tasks WHERE id = ?").bind(id).first();
-  return withScore(row);
+  return withScore(await attachStudiedMinutesOne(env, row));
 }
 
 async function deleteTask(env, id) {
@@ -333,7 +505,7 @@ async function focusQueueNext(env) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM tasks WHERE status != 'done' ORDER BY created_at DESC"
   ).all();
-  const scored = sortByPriority(results);
+  const scored = sortByPriority(await attachStudiedMinutes(env, results));
   return scored[0] || null;
 }
 
@@ -448,6 +620,13 @@ async function weeklyReview(env) {
 
   const streak = await getTaskStreak(env);
 
+  // 学習記録機能との連携：同じ7日間に実際に学習した合計時間・タスク由来の時間も合わせて見せる
+  const studyTotals = await env.DB.prepare(
+    `SELECT COALESCE(SUM(duration_minutes), 0) AS total,
+            COALESCE(SUM(CASE WHEN task_id IS NOT NULL THEN duration_minutes ELSE 0 END), 0) AS from_tasks
+     FROM study_records WHERE date >= ?`
+  ).bind(since).first();
+
   return {
     since,
     total_tasks: allInWindow.length,
@@ -456,6 +635,8 @@ async function weeklyReview(env) {
     average_postponed_count: Number(avgPostponed.toFixed(2)),
     completed_by_type: byType,
     streak: { current_count: streak.current_count, longest_count: streak.longest_count },
+    total_study_minutes: studyTotals?.total || 0,
+    study_minutes_from_tasks: studyTotals?.from_tasks || 0,
   };
 }
 
@@ -499,10 +680,11 @@ async function handleApi(request, env, url) {
     if (resource === "summary" && request.method === "GET") {
       const date = url.searchParams.get("date");
       if (!DATE_RE.test(date || "")) return fail("date をYYYY-MM-DD形式で指定してください");
-      const [records, streak, diary] = await Promise.all([
+      const [records, streak, diary, testPeriod] = await Promise.all([
         recordsForDate(env, date),
         computeStreak(env, date),
         getDiary(env, date),
+        testPeriodStatus(env, date),
       ]);
       const totalMinutes = records.reduce((s, r) => s + r.duration_minutes, 0);
       return json({
@@ -512,7 +694,14 @@ async function handleApi(request, env, url) {
         streak: streak.count,
         streak_dates: streak.dates,
         diary: diary.content,
+        test_period: testPeriod,
       });
+    }
+
+    if (resource === "test-dates") {
+      if (request.method === "GET") return json(await listTestDates(env));
+      if (request.method === "POST") return json(await createTestDate(env, await request.json()));
+      if (request.method === "DELETE" && id) return json(await deleteTestDate(env, id));
     }
 
     if (resource === "tasks") {

@@ -14,6 +14,11 @@
   const diaryInput = document.getElementById("diary-input");
   const diarySaveBtn = document.getElementById("diary-save-btn");
   const diaryMessage = document.getElementById("diary-message");
+  const testDateList = document.getElementById("test-date-list");
+  const testDateEmpty = document.getElementById("test-date-empty");
+  const testDateForm = document.getElementById("test-date-form");
+  const testDateInput = document.getElementById("test-date-input");
+  const testDateLabelInput = document.getElementById("test-date-label-input");
 
   let types = [];
   let selectedTypeId = null;
@@ -121,7 +126,16 @@
         await api(`/api/records/${r.id}`, { method: "DELETE" });
         await loadTodayList();
       });
-      li.append(dot, content, meta, del);
+      const parts = [dot, content];
+      if (r.task_id) {
+        const link = document.createElement("span");
+        link.className = "entry-task-link";
+        link.textContent = "🔗";
+        link.title = "タスク完了時に記録した学習";
+        parts.push(link);
+      }
+      parts.push(meta, del);
+      li.append(...parts);
       todayList.appendChild(li);
     }
   }
@@ -185,6 +199,56 @@
     }
   });
 
+  function formatDateJp(iso) {
+    const [, m, d] = iso.split("-");
+    return `${Number(m)}/${Number(d)}`;
+  }
+
+  async function loadTestDates() {
+    const list = await api("/api/test-dates");
+    testDateList.innerHTML = "";
+    testDateEmpty.style.display = list.length ? "none" : "block";
+    for (const t of list) {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.className = "test-date-name";
+      label.textContent = `${formatDateJp(t.date)}${t.label ? "　" + t.label : ""}`;
+      const del = document.createElement("button");
+      del.className = "icon-btn";
+      del.type = "button";
+      del.textContent = "削除";
+      del.addEventListener("click", async () => {
+        try {
+          await api(`/api/test-dates/${t.id}`, { method: "DELETE" });
+          await loadTestDates();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+      li.append(label, del);
+      testDateList.appendChild(li);
+    }
+  }
+
+  testDateForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/test-dates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: testDateInput.value,
+          label: testDateLabelInput.value.trim(),
+        }),
+      });
+      testDateInput.value = "";
+      testDateLabelInput.value = "";
+      await loadTestDates();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
   typeForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -210,5 +274,6 @@
     await loadTypes();
     await loadTodayList();
     await loadDiary();
+    await loadTestDates();
   })();
 })();

@@ -18,6 +18,7 @@
   --teal: #2e8c82;
   --coral: #d9694f;
   --moss: #6e8f5d;
+  --violet: #7c5c9e;
 
   --font-display: "Shippori Mincho", serif;
   --font-body: "Zen Maru Gothic", sans-serif;
@@ -30,6 +31,7 @@
   --chrome-text-soft: var(--graphite-soft);
   --chrome-border: rgba(58, 54, 46, 0.3);
   --chrome-accent: var(--amber-deep);
+  --chrome-violet: var(--violet);
 }
 
 body.theme-dark {
@@ -39,6 +41,7 @@ body.theme-dark {
   --chrome-text-soft: rgba(250, 246, 236, 0.82);
   --chrome-border: rgba(250, 246, 236, 0.4);
   --chrome-accent: var(--amber);
+  --chrome-violet: #c3a6e6;
 }
 
 * {
@@ -224,6 +227,12 @@ body.page-input {
   color: #fff;
 }
 
+.btn-secondary.is-outline {
+  background: none;
+  border: 1px solid var(--teal);
+  color: var(--teal);
+}
+
 .form-message {
   min-height: 1.2em;
   font-size: 0.88rem;
@@ -259,6 +268,12 @@ body.page-input {
   border-radius: 50%;
   flex: none;
   background: var(--dot-color, var(--teal));
+}
+
+.entry-task-link {
+  flex: none;
+  font-size: 0.85rem;
+  opacity: 0.75;
 }
 
 .today-list .entry-meta {
@@ -359,6 +374,12 @@ body.page-input {
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--coral);
+}
+
+.task-studied {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--teal);
 }
 
 .task-days {
@@ -662,6 +683,12 @@ body.page-input {
   font-size: 0.9rem;
 }
 
+.review-study-minutes {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--graphite-soft);
+}
+
 /* ---------- 集中モード ---------- */
 
 .focus-overlay {
@@ -724,12 +751,92 @@ body.page-input {
   display: inline-block;
 }
 
+.focus-elapsed {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3rem;
+  color: rgba(250, 246, 236, 0.75);
+}
+
 .focus-complete-btn {
   width: 100%;
   margin-top: 48px;
   padding: 18px;
   font-size: 1.1rem;
   border-radius: 14px;
+}
+
+.focus-log {
+  text-align: left;
+}
+
+.focus-log-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 8px 0 24px;
+  text-align: center;
+}
+
+.focus-log-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.time-adj {
+  appearance: none;
+  border: 1px solid rgba(250, 246, 236, 0.4);
+  background: none;
+  color: var(--paper);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.focus-log-time-row input[type="number"] {
+  width: 84px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(250, 246, 236, 0.4);
+  background: rgba(250, 246, 236, 0.08);
+  color: var(--paper);
+}
+
+.focus-log-unit {
+  font-size: 1.1rem;
+  color: rgba(250, 246, 236, 0.75);
+}
+
+#focus-log-type-picker {
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+#focus-log-save-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 1.05rem;
+  border-radius: 14px;
+}
+
+#focus-log-skip-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: none;
+  border: 1px solid rgba(250, 246, 236, 0.4);
+  color: var(--paper);
 }
 
 .focus-break-time {
@@ -799,6 +906,70 @@ body.page-input {
   border: none;
   padding: 0;
   background: none;
+}
+
+/* ---------- テスト期間 ---------- */
+
+.test-manage-card {
+  border-left-color: var(--violet);
+}
+
+.test-manage-card summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.test-manage-card[open] summary {
+  margin-bottom: 14px;
+}
+
+.test-manage-hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--graphite-soft);
+}
+
+.test-date-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-date-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+}
+
+.test-date-name {
+  flex: 1;
+}
+
+.test-date-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.test-date-form input[type="date"] {
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(58, 54, 46, 0.28);
+}
+
+.test-date-form input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(58, 54, 46, 0.28);
 }
 
 /* ==========================================================
@@ -1009,15 +1180,51 @@ body.theme-dimmed .dim-overlay {
   color: var(--amber-deep);
 }
 
-.day-cell .day-dots {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+.day-cell.is-test-day::after {
+  content: "📝";
+  position: absolute;
+  z-index: 2;
+  bottom: 2px;
+  right: 4px;
+  font-size: 0.72rem;
+  opacity: 0.85;
 }
 
-.day-dots .dot {
-  width: 8px;
-  height: 8px;
+.day-cell.is-test-highlight {
+  box-shadow: inset 0 0 0 2px var(--violet), 0 0 10px rgba(124, 92, 158, 0.55);
+}
+
+.day-cell.is-test-highlight::after {
+  content: "★";
+  color: var(--violet);
+  opacity: 1;
+  font-size: 0.85rem;
+  text-shadow: 0 0 6px rgba(124, 92, 158, 0.6);
+}
+
+.day-cell {
+  cursor: pointer;
+}
+
+.day-cell.is-blank {
+  cursor: default;
+}
+
+.day-cell:active {
+  filter: brightness(0.94);
+}
+
+.day-cell .day-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(58, 54, 46, 0.12);
+  overflow: hidden;
+  display: flex;
+}
+
+.day-bar-seg {
+  height: 100%;
+  flex: 0 0 auto;
 }
 
 .summary-panel {
@@ -1076,6 +1283,33 @@ body.theme-dimmed .dim-overlay {
   opacity: 0.8;
 }
 
+/* ---------- テスト期間限定ストリーク ---------- */
+
+.test-period-block {
+  flex-shrink: 0;
+  background: rgba(124, 92, 158, 0.16);
+  border: 1px solid rgba(124, 92, 158, 0.4);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chrome-text);
+  font-size: 0.88rem;
+  transition: background 1.5s ease;
+}
+
+.test-period-icon {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.test-period-text strong {
+  font-family: var(--font-display);
+  color: var(--chrome-violet);
+  font-size: 1.05rem;
+}
+
 .today-summary-block {
   flex: 1;
   min-height: 0;
@@ -1091,11 +1325,60 @@ body.theme-dimmed .dim-overlay {
   color: var(--chrome-text);
 }
 
+.today-summary-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.today-pie {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.today-pie svg,
+.day-detail-pie svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pie-center-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.today-pie .pie-center-label {
+  color: var(--chrome-text);
+}
+
+.today-summary-top-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .today-total {
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--chrome-text);
   font-size: 1rem;
   font-weight: 700;
+}
+
+.today-goal-note {
+  margin: 0;
+  color: var(--chrome-text-soft);
+  font-size: 0.78rem;
 }
 
 .today-summary-list {
@@ -1170,4 +1453,145 @@ body.theme-dimmed .dim-overlay {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---------- 日別の学習詳細（カレンダーの日付をタップして表示） ---------- */
+
+.day-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(20, 18, 14, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.day-detail-card {
+  position: relative;
+  background: var(--paper);
+  color: var(--graphite);
+  border-radius: 10px;
+  padding: 26px 28px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
+}
+
+.day-detail-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  appearance: none;
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--graphite-soft);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.day-detail-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  margin: 0 22px 16px 0;
+}
+
+.day-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.day-detail-pie {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+}
+
+.day-detail-pie .pie-center-label {
+  color: var(--graphite);
+  font-size: 0.85rem;
+}
+
+.day-detail-top-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.day-detail-total {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.day-detail-goal-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--graphite-soft);
+}
+
+.day-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-detail-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+/* ---------- タスク完了時の学習記録フォーム（入力ページ・紙の上に乗る配色） ---------- */
+
+.task-log-card {
+  text-align: center;
+}
+
+.task-log-task-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 0 0 18px;
+}
+
+.task-log-card .time-adj {
+  border-color: rgba(58, 54, 46, 0.3);
+  color: var(--graphite);
+}
+
+.task-log-card .focus-log-time-row input[type="number"] {
+  border-color: rgba(58, 54, 46, 0.3);
+  background: rgba(58, 54, 46, 0.06);
+  color: var(--graphite);
+}
+
+.task-log-card .focus-log-unit {
+  color: var(--graphite-soft);
+}
+
+.task-log-card #task-log-type-picker {
+  justify-content: center;
+  margin-bottom: 22px;
+}
+
+.task-log-card .btn-primary,
+.task-log-card .btn-secondary {
+  width: 100%;
+  border-radius: 8px;
+}
+
+.task-log-card .btn-secondary.is-outline {
+  margin-top: 10px;
 }
